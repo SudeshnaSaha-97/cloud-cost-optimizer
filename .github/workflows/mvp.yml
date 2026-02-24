@@ -1,0 +1,102 @@
+name: SaaS MVP Pipeline
+
+on:
+  workflow_dispatch:   # manual trigger
+  push:
+    branches: [ main ] # auto-trigger on commits to main
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      - name: Authenticate with GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Terraform Init & Apply
+        run: |
+          cd infra/terraform
+          terraform init
+          terraform apply -auto-approve -var-file="terraform.tfvars"
+
+  build:
+    runs-on: ubuntu-latest
+    needs: provision
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to Artifact Registry
+        uses: docker/login-action@v3
+        with:
+          username: _json_key
+          password: ${{ secrets.GCP_SA_KEY }}
+          registry: us-central1-docker.pkg.dev
+
+      - name: Build & Push Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: us-central1-docker.pkg.dev/cloud-cost-optimizer-488008/frontend-repo/frontend:latest
+
+      - name: Build & Push Backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: us-central1-docker.pkg.dev/cloud-cost-optimizer-488008/backend-repo/backend:latest
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate with GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure GKE Cluster
+        run: |
+          gcloud container clusters get-credentials cloud-cost-cluster \
+            --zone us-central1-a \
+            --project cloud-cost-optimizer-488008
+
+      - name: Apply Kubernetes Manifests
+        run: kubectl apply -f infra/k8s/
+
+      - name: Monitor Rollout
+        run: |
+          set -e
+          kubectl rollout status deployment/frontend-deployment || \
+            (kubectl rollout undo deployment/frontend-deployment && exit 1)
+          kubectl rollout status deployment/backend-deployment || \
+            (kubectl rollout undo deployment/backend-deployment && exit 1)
+
+      - name: Collect Cluster Status
+        run: |
+          echo "PODS:" > status.txt
+          kubectl get pods -o wide >> status.txt
+          echo "\nSERVICES:" >> status.txt
+          kubectl get svc >> status.txt
+          echo "\nINGRESS:" >> status.txt
+          kubectl get ingress >> status.txt
+
+      - name: Notify Slack
+        if: always()
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          payload-file: status.txt
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

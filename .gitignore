@@ -1,0 +1,41 @@
+# Ignore service account keys
+backend/app/keys/service-account.json
+backend/app/keys/*.json
+
+
+---
+
+## 📂 `.gitignore`
+
+```gitignore
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.env
+
+# Node
+node_modules/
+build/
+dist/
+
+# Logs
+*.log
+logs/
+
+# Docker
+*.dockerfile
+*.tar
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Secrets
+*.json
+*.key
+*.pem
+.env

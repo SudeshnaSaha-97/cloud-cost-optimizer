@@ -1,0 +1,74 @@
+pipeline {
+    agent any
+
+    environment {
+        REGISTRY = "us-central1-docker.pkg.dev/cloud-cost-optimizer-488008"
+        FRONTEND_IMAGE = "${REGISTRY}/frontend-repo/frontend:latest"
+        BACKEND_IMAGE  = "${REGISTRY}/backend-repo/backend:latest"
+        SLACK_WEBHOOK = credentials('slack-webhook') // Jenkins secret
+    }
+
+    stages {
+        stage('Checkout') {
+            steps { checkout scm }
+        }
+
+        stage('Build Frontend') {
+            steps { sh 'bash infra/ci-cd/jenkins/scripts/build.sh frontend' }
+        }
+
+        stage('Build Backend') {
+            steps { sh 'bash infra/ci-cd/jenkins/scripts/build.sh backend' }
+        }
+
+        stage('Push Images') {
+            steps {
+                sh 'bash infra/ci-cd/jenkins/scripts/push.sh frontend'
+                sh 'bash infra/ci-cd/jenkins/scripts/push.sh backend'
+            }
+        }
+
+        stage('Deploy to GKE') {
+            steps {
+                sh '''
+                set -e
+                kubectl apply -f infra/k8s/
+                kubectl rollout status deployment/frontend-deployment || \
+                  (kubectl rollout undo deployment/frontend-deployment && exit 1)
+                kubectl rollout status deployment/backend-deployment || \
+                  (kubectl rollout undo deployment/backend-deployment && exit 1)
+                '''
+            }
+        }
+
+        stage('Collect Cluster Status') {
+            steps {
+                sh '''
+                echo "PODS:" > status.txt
+                kubectl get pods -o wide >> status.txt
+                echo "\nSERVICES:" >> status.txt
+                kubectl get svc >> status.txt
+                echo "\nINGRESS:" >> status.txt
+                kubectl get ingress >> status.txt
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ CI/CD pipeline completed successfully!'
+            slackSend (
+              webhookUrl: SLACK_WEBHOOK,
+              message: "✅ Jenkins pipeline succeeded for Cloud Cost Optimizer! Cluster status:\n${readFile('status.txt')}"
+            )
+        }
+        failure {
+            echo '❌ CI/CD pipeline failed. Rollback executed.'
+            slackSend (
+              webhookUrl: SLACK_WEBHOOK,
+              message: "⚠️ Jenkins pipeline failed and rollback executed for Cloud Cost Optimizer. Check Jenkins logs."
+            )
+        }
+    }
+}
