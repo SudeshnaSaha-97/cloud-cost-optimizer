@@ -19,9 +19,14 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
+      - name: Set GOOGLE_CREDENTIALS env
+        run: echo "${{ secrets.GCP_SA_KEY }}" > ${HOME}/gcp-key.json
+        shell: bash
+
       - name: Terraform Init & Apply
         run: |
           cd infra/terraform
+          export GOOGLE_APPLICATION_CREDENTIALS=${HOME}/gcp-key.json
           terraform init
           terraform apply -auto-approve -var-file="terraform.tfvars"
 
