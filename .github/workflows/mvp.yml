@@ -20,8 +20,8 @@ jobs:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       - name: Set GOOGLE_CREDENTIALS env
-        run: echo "${{ secrets.GCP_SA_KEY }}" > ${HOME}/gcp-key.json
-        shell: bash
+        run: | 
+          printf '%s' '${{ secrets.GCP_SA_KEY }}' > $HOME/gcp-key.json
 
       - name: Terraform Init & Apply
         run: |
