@@ -2,12 +2,16 @@
 FROM node:18-alpine AS build
 WORKDIR /app
 
-# Copy package.json and install dependencies
+# Install build dependencies for native modules
+RUN apk add --no-cache python3 make g++ libc6-compat
+
+# Copy package.json and lockfile, then install dependencies
 COPY package*.json ./
 RUN npm install --legacy-peer-deps
 
 # Copy source code and build
 COPY . .
+ENV NODE_OPTIONS=--max_old_space_size=4096
 RUN npm run build
 
 # Step 2: Serve with Nginx
