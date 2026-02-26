@@ -6,6 +6,7 @@ metadata:
     app: backend
 spec:
   replicas: 2
+  progressDeadlineSeconds: 1200
   selector:
     matchLabels:
       app: backend
@@ -49,4 +50,4 @@ spec:
             - "-instances=cloud-cost-optimizer-488008:us-central1:cloud-cost-postgres=tcp:5432"
           securityContext:
             runAsNonRoot: true
-      progressDeadlineSeconds: 1200
+
