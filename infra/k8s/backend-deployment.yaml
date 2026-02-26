@@ -29,17 +29,17 @@ spec:
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret
+                  name: cloudsql-db-credentials
                   key: username
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret
+                  name: cloudsql-db-credentials
                   key: password
             - name: DB_NAME
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret
+                  name: cloudsql-db-credentials
                   key: database
 
         - name: cloudsql-proxy
@@ -49,3 +49,4 @@ spec:
             - "-instances=cloud-cost-optimizer-488008:us-central1:cloud-cost-postgres=tcp:5432"
           securityContext:
             runAsNonRoot: true
+      progressDeadlineSeconds: 1200

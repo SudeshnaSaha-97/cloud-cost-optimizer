@@ -90,9 +90,12 @@ jobs:
         run: |
           set -e
           kubectl rollout status deployment/frontend-deployment || \
-            (kubectl rollout undo deployment/frontend-deployment && exit 1)
+            (echo "Frontend rollout failed. Logs:" && kubectl logs -l app=frontend --tail=100 && exit 1)
+
           kubectl rollout status deployment/backend-deployment || \
-            (kubectl rollout undo deployment/backend-deployment && exit 1)
+            (echo "Backend rollout failed. Events:" && kubectl describe deployment backend-deployment && \
+             echo "Backend pods:" && kubectl get pods -l app=backend -o wide && \
+             echo "Backend pod logs:" && kubectl logs -l app=backend --tail=100 && exit 1)
 
       - name: Collect Cluster Status
         run: |
