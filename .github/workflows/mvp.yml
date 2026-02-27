@@ -86,6 +86,18 @@ jobs:
       - name: Apply Kubernetes Manifests
         run: kubectl apply -f infra/k8s/
 
+      - name: Rebuild & Push Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: us-central1-docker.pkg.dev/cloud-cost-optimizer-488008/backend-repo/backend:latest
+
+      - name: Restart Backend Deployment
+        run: |
+          kubectl rollout restart deployment backend-deployment
+          kubectl rollout status deployment backend-deployment
+
       - name: Monitor Rollout
         run: |
           set -e
