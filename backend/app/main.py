@@ -22,10 +22,10 @@ app.add_middleware(
 )
 
 # Register routers
-app.include_router(resources.router, prefix="/resources", tags=["resources"])
-app.include_router(auth.router, prefix="/auth", tags=["auth"])
+app.include_router(resources.router, prefix="/api/resources", tags=["resources"])
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 
-@app.get("/")
+@app.get("/api")
 def health_check():
     logger.info("Health check called")
     return {"status": "ok", "message": "API running"}
