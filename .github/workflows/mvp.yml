@@ -106,13 +106,49 @@ jobs:
           echo "\nINGRESS:" >> status.txt
           kubectl get ingress >> status.txt
 
+      - name: Prepare Slack Payload
+        run: |
+          PODS="$(kubectl get pods --no-headers | awk '{print $3}' | sort | uniq -c | sed 's/^ *//')"
+          SERVICES="$(kubectl get svc --no-headers)"
+          INGRESS="$(kubectl get ingress --no-headers)"
+
+          # Build Slack JSON payload
+          cat <<EOF > slack-payload.json
+          {
+            "blocks": [
+              {
+                "type": "header",
+                "text": { "type": "plain_text", "text": "🚀 SaaS MVP Deployment Status" }
+              },
+              {
+                "type": "section",
+                "fields": [
+                  { "type": "mrkdwn", "text": "*Pipeline:* Cloud Cost Optimizer" },
+                  { "type": "mrkdwn", "text": "*Status:* ${{ job.status }}" }
+                ]
+              },
+              { "type": "divider" },
+              {
+                "type": "section",
+                "text": { "type": "mrkdwn", "text": "*Pods Summary:* \n*Running:* $(echo "$PODS" | grep Running | awk '{print $1}') \n*CrashLoopBackOff:* $(echo "$PODS" | grep CrashLoopBackOff | awk '{print $1}') \n*Other:* $(echo "$PODS" | grep -v Running | grep -v CrashLoopBackOff | awk '{print $1,$2}')" }
+              },
+              {
+                "type": "section",
+                "text": { "type": "mrkdwn", "text": "*Services:* \n${SERVICES}" }
+              },
+              {
+                "type": "section",
+                "text": { "type": "mrkdwn", "text": "*Ingress:* \n${INGRESS}" }
+              }
+            ]
+          }
+          EOF
+
       - name: Notify Slack
         if: always()
         uses: slackapi/slack-github-action@v1.27.0
         with:
           channel-id: ${{ secrets.SLACK_CHANNEL_ID }}
-          slack-message: |
-            SaaS MVP pipeline finished.
-            Status: ${{ job.status }}
+          payload-file-path: slack-payload.json
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}

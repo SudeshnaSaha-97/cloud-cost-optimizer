@@ -4,6 +4,7 @@ metadata:
   name: cloud-cost-ingress
   annotations:
     kubernetes.io/ingress.class: "gce"
+    nginx.ingress.kubernetes.io/rewrite-target: /
 spec:
   rules:
     - http:
