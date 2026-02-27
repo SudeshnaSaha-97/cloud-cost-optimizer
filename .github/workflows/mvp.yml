@@ -112,37 +112,27 @@ jobs:
           SERVICES="$(kubectl get svc --no-headers)"
           INGRESS="$(kubectl get ingress --no-headers)"
 
-          # Build Slack JSON payload
-          cat <<EOF > slack-payload.json
-          {
-            "blocks": [
-              {
-                "type": "header",
-                "text": { "type": "plain_text", "text": "🚀 SaaS MVP Deployment Status" }
-              },
-              {
-                "type": "section",
-                "fields": [
-                  { "type": "mrkdwn", "text": "*Pipeline:* Cloud Cost Optimizer" },
-                  { "type": "mrkdwn", "text": "*Status:* ${{ job.status }}" }
-                ]
-              },
-              { "type": "divider" },
-              {
-                "type": "section",
-                "text": { "type": "mrkdwn", "text": "*Pods Summary:* \n*Running:* $(echo "$PODS" | grep Running | awk '{print $1}') \n*CrashLoopBackOff:* $(echo "$PODS" | grep CrashLoopBackOff | awk '{print $1}') \n*Other:* $(echo "$PODS" | grep -v Running | grep -v CrashLoopBackOff | awk '{print $1,$2}')" }
-              },
-              {
-                "type": "section",
-                "text": { "type": "mrkdwn", "text": "*Services:* \n${SERVICES}" }
-              },
-              {
-                "type": "section",
-                "text": { "type": "mrkdwn", "text": "*Ingress:* \n${INGRESS}" }
-              }
-            ]
-          }
-          EOF
+          jq -n \
+            --arg status "${{ job.status }}" \
+            --arg pods "$PODS" \
+            --arg services "$SERVICES" \
+            --arg ingress "$INGRESS" \
+            '{
+              blocks: [
+                { type: "header", text: { type: "plain_text", text: "🚀 SaaS MVP Deployment Status" } },
+                { type: "section", fields: [
+                    { type: "mrkdwn", text: "*Pipeline:* Cloud Cost Optimizer" },
+                    { type: "mrkdwn", text: "*Status:* \($status)" }
+                ]},
+                { type: "divider" },
+                { type: "section", text: { type: "mrkdwn", text: "*Pods Summary:* \n\($pods)" } },
+                { type: "section", text: { type: "mrkdwn", text: "*Services:* \n\($services)" } },
+                { type: "section", text: { type: "mrkdwn", text: "*Ingress:* \n\($ingress)" } }
+              ]
+            }' > slack-payload.json
+
+      - name: Validate Slack JSON
+        run: jq . slack-payload.json
 
       - name: Notify Slack
         if: always()
