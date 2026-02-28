@@ -1,9 +1,9 @@
 name: SaaS MVP Pipeline
 
 on:
-  workflow_dispatch:   # manual trigger
+  workflow_dispatch:
   push:
-    branches: [ main ] # auto-trigger on commits to main
+    branches: [ main ]
 
 jobs:
   provision:
@@ -29,22 +29,6 @@ jobs:
           export GOOGLE_APPLICATION_CREDENTIALS=${HOME}/gcp-key.json
           terraform init
           terraform apply -auto-approve -var-file="terraform.tfvars"
-
-      - name: Capture Terraform Outputs
-        run: |
-          cd infra/terraform
-          terraform output -json > tf-outputs.json
-        continue-on-error: true
-
-      - name: Save Ingress IP
-        id: ingress
-        run: |
-          IP=$(kubectl get ingress cloud-cost-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-          if [ -n "$IP" ]; then
-            echo "INGRESS_IP=$IP" >> $GITHUB_ENV
-          else
-            echo "No Ingress IP found yet"
-          fi
 
   build:
     runs-on: ubuntu-latest
@@ -105,6 +89,22 @@ jobs:
       - name: Apply Kubernetes Manifests
         run: kubectl apply -f infra/k8s/
 
+      - name: Wait for Ingress IP
+        id: ingress
+        run: |
+          for i in {1..10}; do
+            IP=$(kubectl get ingress cloud-cost-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+            if [ -n "$IP" ]; then
+              echo "INGRESS_IP=$IP" >> $GITHUB_ENV
+              echo "Ingress IP: $IP"
+              exit 0
+            fi
+            echo "Waiting for Ingress IP... attempt $i"
+            sleep 30
+          done
+          echo "Ingress IP not assigned after waiting"
+          exit 1
+
       - name: Update Frontend Deployment Image
         run: |
           kubectl set image deployment/frontend-deployment \
@@ -117,30 +117,32 @@ jobs:
             backend=us-central1-docker.pkg.dev/cloud-cost-optimizer-488008/backend-repo/backend:${{ github.sha }}
           kubectl rollout status deployment/backend-deployment
 
-      - name: Health Check Frontend & Backend
+      - name: Health Check Frontend & Backend (with retries)
         run: |
-          FRONTEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$INGRESS_IP/)
-          BACKEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$INGRESS_IP/api)
-
+          FRONTEND_STATUS="N/A"
+          BACKEND_STATUS="N/A"
           FRONTEND_ICON="❌"
           BACKEND_ICON="❌"
 
-          if [ "$FRONTEND_STATUS" = "200" ]; then FRONTEND_ICON="✅"; fi
-          if [ "$BACKEND_STATUS" = "200" ]; then BACKEND_ICON="✅"; fi
+          for i in {1..3}; do
+            FRONTEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$INGRESS_IP/)
+            BACKEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$INGRESS_IP/api)
+
+            if [ "$FRONTEND_STATUS" = "200" ]; then FRONTEND_ICON="✅"; fi
+            if [ "$BACKEND_STATUS" = "200" ]; then BACKEND_ICON="✅"; fi
+
+            if [ "$FRONTEND_ICON" = "✅" ] && [ "$BACKEND_ICON" = "✅" ]; then
+              break
+            fi
+
+            echo "Health check attempt $i failed, retrying in 20s..."
+            sleep 20
+          done
 
           echo "FRONTEND_STATUS=$FRONTEND_STATUS" >> $GITHUB_ENV
           echo "BACKEND_STATUS=$BACKEND_STATUS" >> $GITHUB_ENV
           echo "FRONTEND_ICON=$FRONTEND_ICON" >> $GITHUB_ENV
           echo "BACKEND_ICON=$BACKEND_ICON" >> $GITHUB_ENV
-
-      - name: Collect Cluster Status
-        run: |
-          echo "PODS:" > status.txt
-          kubectl get pods -o wide >> status.txt
-          echo "\nSERVICES:" >> status.txt
-          kubectl get svc >> status.txt
-          echo "\nINGRESS:" >> status.txt
-          kubectl get ingress >> status.txt
 
       - name: Prepare Slack Payload
         run: |
