@@ -39,9 +39,11 @@ jobs:
       - name: Save Ingress IP
         id: ingress
         run: |
-          if [ -f infra/terraform/tf-outputs.json ]; then
-            IP=$(jq -r '.ingress_ip.value' infra/terraform/tf-outputs.json)
+          IP=$(kubectl get ingress cloud-cost-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          if [ -n "$IP" ]; then
             echo "INGRESS_IP=$IP" >> $GITHUB_ENV
+          else
+            echo "No Ingress IP found yet"
           fi
 
   build:
