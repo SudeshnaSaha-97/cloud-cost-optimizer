@@ -25,7 +25,7 @@ app.add_middleware(
 app.include_router(resources.router, prefix="/api/resources", tags=["resources"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 
-@app.get("/api")
+@app.get("/")
 def root_health_check():
     logger.info("Root health check called")
     return {"status": "ok", "message": "Backend healthy"}
