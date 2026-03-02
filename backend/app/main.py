@@ -7,7 +7,12 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("cloud-cost-optimizer")
 
-app = FastAPI(title="Cloud Cost Optimizer - GCP")
+app = FastAPI(
+    title="Cloud Cost Optimizer - GCP",
+    docs_url="api/docs",
+    redoc_url="api/redoc",
+    openapi_url="/api/openapi.json"
+)
 
 # Allow frontend (React) to talk to backend
 app.add_middleware(
