@@ -1,7 +1,9 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "http://127.0.0.1:8000", // backend FastAPI server
+  // Use relative path so it works in production (Ingress routes /api to backend)
+  // and in local dev (React dev server proxy can forward /api to 127.0.0.1:8000).
+  baseURL: "/api", // backend FastAPI server
 });
 
 api.interceptors.request.use((config) => {

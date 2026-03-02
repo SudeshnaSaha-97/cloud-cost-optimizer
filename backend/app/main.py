@@ -29,3 +29,11 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 def root_health_check():
     logger.info("Root health check called")
     return {"status": "ok", "message": "Backend healthy"}
+
+@app.get("/api")
+def api_index():
+    return {
+        "resources": "/api/resources",
+        "auth_login": "/api/auth/login",
+        "health": "/"
+    }
