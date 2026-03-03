@@ -9,8 +9,8 @@ logger = logging.getLogger("cloud-cost-optimizer")
 
 app = FastAPI(
     title="Cloud Cost Optimizer - GCP",
-    docs_url="api/docs",
-    redoc_url="api/redoc",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
     openapi_url="/api/openapi.json"
 )
 
