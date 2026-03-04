@@ -1,16 +1,33 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes import resources, auth
-import logging
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("cloud-cost-optimizer")
+from app.utils.logger import logger
 
 app = FastAPI(
     title="Cloud Cost Optimizer - GCP",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
+    description="""
+Cloud Cost Optimizer is a SaaS MVP for identifying idle resources, estimating savings, 
+and providing actionable insights across GCP environments.
+
+**Features:**
+- Authentication endpoints (`/api/auth/login`)
+- Resource scanning (`/api/resources/`)
+- Health check (`/`)
+
+Use the interactive docs below to test APIs directly.
+    """,
+    version="0.1.0",
+    contact={
+        "name": "Sudeshna Saha",
+        "url": "https://github.com/sudeshnasaha",  # replace with your project site if available
+        "email": "sudeshna@example.com",
+    },
+    license_info={
+        "name": "MIT License",
+        "url": "https://opensource.org/licenses/MIT",
+    },
+    docs_url="/api/docs",       # Swagger UI
+    redoc_url="/api/redoc",     # ReDoc
     openapi_url="/api/openapi.json"
 )
 

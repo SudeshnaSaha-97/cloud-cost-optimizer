@@ -1,31 +1,26 @@
-import json
-import os
+# backend/app/services/gcp_scanner.py
 from google.cloud import compute_v1
-from app.utils.logger import logger
+import logging
 
-def list_idle_instances():
-    try:
-        project = os.getenv("GCP_PROJECT_ID")
-        zone = os.getenv("GCP_ZONE", "us-central1-a")
-        creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-        logger.info(f"Using credentials file: {creds_path}")
+logger = logging.getLogger("cloud-cost-optimizer")
 
-        if not os.path.exists(creds_path):
-            logger.error(f"Credentials file not found at {creds_path}")
-            return []
+def list_idle_instances(project_id: str, zone: str = None):
+    """
+    Fetch idle VM instances from GCP Compute Engine.
+    Idle = stopped or terminated instances.
+    """
+    instances_client = compute_v1.InstancesClient()
+    request = compute_v1.AggregatedListInstancesRequest(project=project_id)
 
-        with open(creds_path) as f:
-            creds = json.load(f)
-        project = creds.get("project_id")
+    result = instances_client.aggregated_list(request=request)
 
-        client = compute_v1.InstancesClient()
+    idle_instances = []
+    for zone_name, response in result:
+        if response.instances:
+            for inst in response.instances:
+                status = inst.status
+                if status in ["TERMINATED", "STOPPED"]:
+                    idle_instances.append(inst)
 
-        instances = []
-        logger.info(f"Scanning GCP project {project} in zone {zone}")
-        for instance in client.list(project=project, zone=zone):
-            if instance.status == "TERMINATED":
-                instances.append(instance)
-        return instances
-    except Exception as e:
-        logger.error(f"GCP scan failed: {e}")
-        return []
+    logger.info(f"Found {len(idle_instances)} idle instances")
+    return idle_instances

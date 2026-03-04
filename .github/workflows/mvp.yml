@@ -30,9 +30,24 @@ jobs:
           terraform init
           terraform apply -auto-approve -var-file="terraform.tfvars"
 
-  build:
+  test:
     runs-on: ubuntu-latest
     needs: provision
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+      - name: Run tests
+        run: pytest backend/app/tests --maxfail=1 --disable-warnings -q
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -117,52 +132,61 @@ jobs:
             backend=us-central1-docker.pkg.dev/cloud-cost-optimizer-488008/backend-repo/backend:${{ github.sha }}
           kubectl rollout status deployment/backend-deployment
 
-      - name: Health Check Frontend & Backend (with retries)
+  smoke-test:
+    runs-on: ubuntu-latest
+    needs: [ test, deploy ]
+    steps:
+      - name: Backend Smoke Test
         run: |
-          FRONTEND_STATUS="N/A"
-          BACKEND_STATUS="N/A"
-          FRONTEND_ICON="❌"
+          BACKEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$INGRESS_IP/api)
           BACKEND_ICON="❌"
-
-          for i in {1..3}; do
-            FRONTEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$INGRESS_IP/)
-            BACKEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$INGRESS_IP/api)
-
-            if [ "$FRONTEND_STATUS" = "200" ]; then FRONTEND_ICON="✅"; fi
-            if [ "$BACKEND_STATUS" = "200" ]; then BACKEND_ICON="✅"; fi
-
-            if [ "$FRONTEND_ICON" = "✅" ] && [ "$BACKEND_ICON" = "✅" ]; then
-              break
-            fi
-
-            echo "Health check attempt $i failed, retrying in 20s..."
-            sleep 20
-          done
-
-          echo "FRONTEND_STATUS=$FRONTEND_STATUS" >> $GITHUB_ENV
+          if [ "$BACKEND_STATUS" = "200" ]; then BACKEND_ICON="✅"; fi
           echo "BACKEND_STATUS=$BACKEND_STATUS" >> $GITHUB_ENV
-          echo "FRONTEND_ICON=$FRONTEND_ICON" >> $GITHUB_ENV
           echo "BACKEND_ICON=$BACKEND_ICON" >> $GITHUB_ENV
+          if [ "$BACKEND_STATUS" != "200" ]; then exit 1; fi
 
-      - name: Prepare Slack Payload
+      - name: Frontend Smoke Test
+        run: |
+          FRONTEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$INGRESS_IP/)
+          FRONTEND_ICON="❌"
+          if [ "$FRONTEND_STATUS" = "200" ]; then FRONTEND_ICON="✅"; fi
+          echo "FRONTEND_STATUS=$FRONTEND_STATUS" >> $GITHUB_ENV
+          echo "FRONTEND_ICON=$FRONTEND_ICON" >> $GITHUB_ENV
+          if [ "$FRONTEND_STATUS" != "200" ]; then exit 1; fi
+
+      - name: Pods & Services Summary
         run: |
           PODS="$(kubectl get pods --no-headers | awk '{print $3}' | sort | uniq -c | sed 's/^ *//')"
           SERVICES="$(kubectl get svc --no-headers)"
           INGRESS="$(kubectl get ingress --no-headers)"
-          IP="${INGRESS_IP:-N/A}"
-          FRONTEND="${FRONTEND_STATUS:-N/A}"
-          BACKEND="${BACKEND_STATUS:-N/A}"
-          FRONTEND_ICON="${FRONTEND_ICON:-❌}"
-          BACKEND_ICON="${BACKEND_ICON:-❌}"
+          echo "PODS=$PODS" >> $GITHUB_ENV
+          echo "SERVICES=$SERVICES" >> $GITHUB_ENV
+          echo "INGRESS=$INGRESS" >> $GITHUB_ENV
+
+      - name: Prepare Slack Payload
+        run: |
+          TEST_STATUS="${{ needs.test.result }}"
+          DEPLOY_STATUS="${{ needs.deploy.result }}"
+          SMOKE_STATUS="${{ job.status }}"
+
+          TEST_ICON="❌"; if [ "$TEST_STATUS" = "success" ]; then TEST_ICON="✅"; fi
+          DEPLOY_ICON="❌"; if [ "$DEPLOY_STATUS" = "success" ]; then DEPLOY_ICON="✅"; fi
+          SMOKE_ICON="❌"; if [ "$SMOKE_STATUS" = "success" ]; then SMOKE_ICON="✅"; fi
 
           jq -n \
             --arg status "${{ job.status }}" \
+            --arg test "$TEST_STATUS" \
+            --arg deploy "$DEPLOY_STATUS" \
+            --arg smoke "$SMOKE_STATUS" \
+            --arg test_icon "$TEST_ICON" \
+            --arg deploy_icon "$DEPLOY_ICON" \
+            --arg smoke_icon "$SMOKE_ICON" \
             --arg pods "$PODS" \
             --arg services "$SERVICES" \
             --arg ingress "$INGRESS" \
-            --arg ip "$IP" \
-            --arg frontend "$FRONTEND" \
-            --arg backend "$BACKEND" \
+            --arg ip "$INGRESS_IP" \
+            --arg frontend "$FRONTEND_STATUS" \
+            --arg backend "$BACKEND_STATUS" \
             --arg ficon "$FRONTEND_ICON" \
             --arg bicon "$BACKEND_ICON" \
             '{
@@ -170,7 +194,13 @@ jobs:
                 { type: "header", text: { type: "plain_text", text: "🚀 SaaS MVP Deployment Status" } },
                 { type: "section", fields: [
                     { type: "mrkdwn", text: "*Pipeline:* Cloud Cost Optimizer" },
-                    { type: "mrkdwn", text: "*Status:* \($status)" }
+                    { type: "mrkdwn", text: "*Overall Status:* \($status)" }
+                ]},
+                { type: "divider" },
+                { type: "section", fields: [
+                    { type: "mrkdwn", text: "*Tests:* \($test_icon) (\($test))" },
+                    { type: "mrkdwn", text: "*Deploy:* \($deploy_icon) (\($deploy))" },
+                    { type: "mrkdwn", text: "*Smoke:* \($smoke_icon) (\($smoke))" }
                 ]},
                 { type: "divider" },
                 { type: "section", text: { "type": "mrkdwn", "text": "*Frontend:* <http://\($ip)/|Open Frontend> \($ficon) (HTTP \($frontend))" } },
