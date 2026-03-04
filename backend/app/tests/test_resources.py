@@ -14,7 +14,7 @@ def test_get_resources_empty(monkeypatch):
     from app.routes import resources
     # Patch with correct signature
     monkeypatch.setattr(resources, "list_idle_instances", lambda project_id: [])
-    monkeypatch.setattr(resources, "estimate_savings", lambda inst: 0.0)
+    monkeypatch.setattr(resources, "estimate_savings", lambda inst, project_id: 0.0)
 
     response = client.get("/api/resources/")
     assert response.status_code == 200
@@ -38,7 +38,7 @@ def test_get_resources_with_fixture(monkeypatch):
 
     # Patch with correct signature
     monkeypatch.setattr(resources, "list_idle_instances", lambda project_id: dummy_instances)
-    monkeypatch.setattr(resources, "estimate_savings", lambda inst: 0.0 if inst.status == "RUNNING" else 100.0)
+    monkeypatch.setattr(resources, "estimate_savings", lambda inst, project_id: 0.0 if inst.status == "RUNNING" else 100.0)
 
     response = client.get("/api/resources/")
     assert response.status_code == 200
