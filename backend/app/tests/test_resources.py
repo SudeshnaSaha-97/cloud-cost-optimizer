@@ -11,7 +11,7 @@ def test_health_check():
 
 def test_get_resources_empty(monkeypatch):
     from app.routes import resources
-    monkeypatch.setattr(resources, "list_idle_instances", lambda: [])
+    monkeypatch.setattr(resources, "list_idle_instances", lambda project_id: [])
     monkeypatch.setattr(resources, "estimate_savings", lambda inst: 0.0)
 
     response = client.get("/api/resources/")
