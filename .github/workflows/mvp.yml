@@ -138,20 +138,40 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ test, deploy ]
     steps:
-      - name: Backend Smoke Test
+      - name: Backend Smoke Test (with retries)
         run: |
-          BACKEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$INGRESS_IP/api)
+          BACKEND_STATUS="N/A"
           BACKEND_ICON="❌"
-          if [ "$BACKEND_STATUS" = "200" ]; then BACKEND_ICON="✅"; fi
+
+          for i in {1..5}; do
+            BACKEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$INGRESS_IP/api/health)
+            if [ "$BACKEND_STATUS" = "200" ]; then
+              BACKEND_ICON="✅"
+              break
+            fi
+            echo "Backend health check attempt $i failed (HTTP $BACKEND_STATUS), retrying in 20s..."
+            sleep 20
+          done
+
           echo "BACKEND_STATUS=$BACKEND_STATUS" >> $GITHUB_ENV
           echo "BACKEND_ICON=$BACKEND_ICON" >> $GITHUB_ENV
           if [ "$BACKEND_STATUS" != "200" ]; then exit 1; fi
 
-      - name: Frontend Smoke Test
+      - name: Frontend Smoke Test (with retries)
         run: |
-          FRONTEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$INGRESS_IP/)
+          FRONTEND_STATUS="N/A"
           FRONTEND_ICON="❌"
-          if [ "$FRONTEND_STATUS" = "200" ]; then FRONTEND_ICON="✅"; fi
+
+          for i in {1..5}; do
+            FRONTEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$INGRESS_IP/)
+            if [ "$FRONTEND_STATUS" = "200" ]; then
+              FRONTEND_ICON="✅"
+              break
+            fi
+            echo "Frontend health check attempt $i failed (HTTP $FRONTEND_STATUS), retrying in 20s..."
+            sleep 20
+          done
+
           echo "FRONTEND_STATUS=$FRONTEND_STATUS" >> $GITHUB_ENV
           echo "FRONTEND_ICON=$FRONTEND_ICON" >> $GITHUB_ENV
           if [ "$FRONTEND_STATUS" != "200" ]; then exit 1; fi
@@ -206,7 +226,7 @@ jobs:
                 ]},
                 { type: "divider" },
                 { type: "section", text: { "type": "mrkdwn", "text": "*Frontend:* <http://\($ip)/|Open Frontend> \($ficon) (HTTP \($frontend))" } },
-                { type: "section", text: { "type": "mrkdwn", "text": "*Backend:* <http://\($ip)/api|Open Backend> \($bicon) (HTTP \($backend))" } },
+                { type: "section", text: { "type": "mrkdwn", "text": "*Backend:* <http://\($ip)/api/health|Open Backend> \($bicon) (HTTP \($backend))" } },
                 { type: "section", text: { type: "mrkdwn", text: "*Pods Summary:* \n\($pods)" } },
                 { type: "section", text: { type: "mrkdwn", text: "*Services:* \n\($services)" } },
                 { type: "section", text: { type: "mrkdwn", text: "*Ingress:* \n\($ingress)" } }
