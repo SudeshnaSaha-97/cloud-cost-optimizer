@@ -12,7 +12,7 @@ and providing actionable insights across GCP environments.
 **Features:**
 - Authentication endpoints (`/api/auth/login`)
 - Resource scanning (`/api/resources/`)
-- Health check (`/`)
+- Health check (`/api/health`)
 
 Use the interactive docs below to test APIs directly.
     """,
@@ -50,6 +50,11 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 @app.get("/")
 def root_health_check():
     logger.info("Root health check called")
+    return {"status": "ok", "message": "Backend root healthy"}
+
+@app.get("/api/health")
+def api_health_check():
+    logger.info("API health check called")
     return {"status": "ok", "message": "Backend healthy"}
 
 @app.get("/api")
@@ -57,5 +62,5 @@ def api_index():
     return {
         "resources": "/api/resources",
         "auth_login": "/api/auth/login",
-        "health": "/"
+        "health": "/api/health"
     }
