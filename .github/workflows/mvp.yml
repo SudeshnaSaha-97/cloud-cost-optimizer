@@ -144,7 +144,7 @@ jobs:
           BACKEND_ICON="❌"
 
           for i in {1..5}; do
-            BACKEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$INGRESS_IP/api/health)
+            BACKEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$INGRESS_IP/api)
             if [ "$BACKEND_STATUS" = "200" ]; then
               BACKEND_ICON="✅"
               break
