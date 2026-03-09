@@ -42,6 +42,22 @@ spec:
                 secretKeyRef:
                   name: cloudsql-db-credentials
                   key: database
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 2
+            failureThreshold: 3
 
         - name: cloudsql-proxy
           image: gcr.io/cloudsql-docker/gce-proxy:1.33.3
@@ -50,4 +66,3 @@ spec:
             - "-instances=cloud-cost-optimizer-488008:us-central1:cloud-cost-postgres=tcp:5432"
           securityContext:
             runAsNonRoot: true
-

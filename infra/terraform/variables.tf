@@ -45,4 +45,11 @@ variable "enable_cloudsql_postgres" {
   default     = false
 }
 
+variable "enable_postgres_node" {
+  description = "Enable local Postgres deployment in cluster"
+  type        = bool
+  default     = false
+}
+
+
 
