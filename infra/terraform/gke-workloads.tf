@@ -1,5 +1,6 @@
 # Backend Deployment
 resource "kubernetes_manifest" "backend_deployment" {
+  provider = kubernetes
   manifest = yamldecode(file("${path.module}/../k8s/backend-deployment.yaml"))
 
   depends_on = [google_container_cluster.primary]
@@ -7,6 +8,7 @@ resource "kubernetes_manifest" "backend_deployment" {
 
 # Backend Service
 resource "kubernetes_manifest" "backend_service" {
+  provider = kubernetes
   manifest = yamldecode(file("${path.module}/../k8s/backend-service.yaml"))
 
   depends_on = [google_container_cluster.primary]
@@ -14,6 +16,7 @@ resource "kubernetes_manifest" "backend_service" {
 
 # Frontend Deployment
 resource "kubernetes_manifest" "frontend_deployment" {
+  provider = kubernetes
   manifest = yamldecode(file("${path.module}/../k8s/frontend-deployment.yaml"))
 
   depends_on = [google_container_cluster.primary]
@@ -21,6 +24,7 @@ resource "kubernetes_manifest" "frontend_deployment" {
 
 # Frontend Service
 resource "kubernetes_manifest" "frontend_service" {
+  provider = kubernetes
   manifest = yamldecode(file("${path.module}/../k8s/frontend-service.yaml"))
 
   depends_on = [google_container_cluster.primary]

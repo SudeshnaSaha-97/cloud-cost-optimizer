@@ -30,7 +30,8 @@ provider "kubernetes" {
 
   # Ensure provider waits until cluster is created
   load_config_file       = false
-  alias                  = "gke"
+
+  depends_on = [google_container_cluster.primary]
 }
 
 provider "http" {
