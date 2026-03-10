@@ -50,4 +50,29 @@ output "jenkins_vm_ip" {
   description = "Public IP of Jenkins VM (empty if disabled)"
 }
 
+# -----------------------------
+# Ingress Outputs
+# -----------------------------
+# -----------------------------
+# Ingress Outputs
+# -----------------------------
+output "ingress_ip" {
+  value       = try(chomp(file("${path.module}/ingress_ip.txt")), "")
+  description = "Public IP address assigned to the GKE ingress"
+}
 
+# -----------------------------
+# Backend Health Check Outputs
+# -----------------------------
+output "backend_health_status" {
+  value       = try(chomp(file("${path.module}/backend_status.txt")), "000")
+  description = "Final backend health status code after retries"
+}
+
+# -----------------------------
+# Frontend Health Check Outputs
+# -----------------------------
+output "frontend_health_status" {
+  value       = try(chomp(file("${path.module}/frontend_status.txt")), "000")
+  description = "Final frontend health status code after retries"
+}

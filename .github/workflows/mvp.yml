@@ -84,50 +84,64 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Authenticate with GCP
       - name: Authenticate with GCP
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Setup gcloud with GKE plugin
+      # Setup gcloud (needed for Terraform provider)
+      - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
+
+      # Setup Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
         with:
-          install_components: gke-gcloud-auth-plugin
+          terraform_version: 1.6.6
 
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v4
+      # Initialize Terraform
+      - name: Terraform Init
+        working-directory: infra/terraform
+        run: terraform init
 
-      - name: Configure GKE Cluster
-        run: |
-          gcloud container clusters get-credentials cloud-cost-cluster \
-            --zone us-central1-a \
-            --project cloud-cost-optimizer-488008
+      # Validate Terraform
+      - name: Terraform Validate
+        working-directory: infra/terraform
+        run: terraform validate
 
-      - name: Apply Kubernetes Manifests
-        run: kubectl apply -f infra/k8s/
+      # Plan Terraform changes
+      - name: Terraform Plan
+        working-directory: infra/terraform
+        run: terraform plan -out=tfplan
 
-      - name: Wait for Ingress IP
+      # Apply Terraform changes (deploy infra + workloads)
+      - name: Terraform Apply
+        working-directory: infra/terraform
+        run: terraform apply -auto-approve tfplan
+
+      # Extract Ingress IP from Terraform output
+      - name: Get Ingress IP
         id: ingress
+        working-directory: infra/terraform
         run: |
-          for i in {1..10}; do
-            IP=$(kubectl get ingress cloud-cost-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
-            if [ -n "$IP" ]; then
-              echo "INGRESS_IP=$IP" >> $GITHUB_ENV
-              echo "Ingress IP: $IP"
-              exit 0
-            fi
-            echo "Waiting for Ingress IP... attempt $i"
-            sleep 30
-          done
-          echo "Ingress IP not assigned after waiting"
-          exit 1
+          IP=$(terraform output -raw ingress_ip || true)
+          if [ -n "$IP" ]; then
+            echo "INGRESS_IP=$IP" >> $GITHUB_ENV
+            echo "Ingress IP: $IP"
+          else
+            echo "Ingress IP not found"
+            exit 1
+          fi
 
+      # Update Frontend Deployment Image via kubectl set image
       - name: Update Frontend Deployment Image
         run: |
           kubectl set image deployment/frontend-deployment \
             frontend=us-central1-docker.pkg.dev/cloud-cost-optimizer-488008/frontend-repo/frontend:${{ github.sha }}
           kubectl rollout status deployment/frontend-deployment
 
+      # Update Backend Deployment Image via kubectl set image
       - name: Update Backend Deployment Image
         run: |
           kubectl set image deployment/backend-deployment \
@@ -138,43 +152,42 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ test, deploy ]
     steps:
-      - name: Backend Smoke Test (with retries)
-        run: |
-          BACKEND_STATUS="N/A"
-          BACKEND_ICON="❌"
+      - uses: actions/checkout@v4
 
-          for i in {1..5}; do
-            BACKEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$INGRESS_IP/api/health)
-            if [ "$BACKEND_STATUS" = "200" ]; then
-              BACKEND_ICON="✅"
-              break
-            fi
-            echo "Backend health check attempt $i failed (HTTP $BACKEND_STATUS), retrying in 20s..."
-            sleep 20
-          done
+      - name: Authenticate with GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.6.6
+
+      - name: Terraform Init
+        working-directory: infra/terraform
+        run: terraform init
+
+      - name: Terraform Apply Smoke Tests
+        working-directory: infra/terraform
+        run: terraform apply -auto-approve -target=null_resource.backend_smoke_test -target=null_resource.frontend_smoke_test
+
+      - name: Collect Health Status
+        working-directory: infra/terraform
+        run: |
+          BACKEND_STATUS=$(terraform output -raw backend_health_status || echo "000")
+          FRONTEND_STATUS=$(terraform output -raw frontend_health_status || echo "000")
+
+          BACKEND_ICON="❌"; [ "$BACKEND_STATUS" = "200" ] && BACKEND_ICON="✅"
+          FRONTEND_ICON="❌"; [ "$FRONTEND_STATUS" = "200" ] && FRONTEND_ICON="✅"
 
           echo "BACKEND_STATUS=$BACKEND_STATUS" >> $GITHUB_ENV
-          echo "BACKEND_ICON=$BACKEND_ICON" >> $GITHUB_ENV
-          if [ "$BACKEND_STATUS" != "200" ]; then exit 1; fi
-
-      - name: Frontend Smoke Test (with retries)
-        run: |
-          FRONTEND_STATUS="N/A"
-          FRONTEND_ICON="❌"
-
-          for i in {1..5}; do
-            FRONTEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$INGRESS_IP/)
-            if [ "$FRONTEND_STATUS" = "200" ]; then
-              FRONTEND_ICON="✅"
-              break
-            fi
-            echo "Frontend health check attempt $i failed (HTTP $FRONTEND_STATUS), retrying in 20s..."
-            sleep 20
-          done
-
           echo "FRONTEND_STATUS=$FRONTEND_STATUS" >> $GITHUB_ENV
+          echo "BACKEND_ICON=$BACKEND_ICON" >> $GITHUB_ENV
           echo "FRONTEND_ICON=$FRONTEND_ICON" >> $GITHUB_ENV
-          if [ "$FRONTEND_STATUS" != "200" ]; then exit 1; fi
+
+          [ "$BACKEND_STATUS" = "200" ] || exit 1
+          [ "$FRONTEND_STATUS" = "200" ] || exit 1
 
       - name: Pods & Services Summary
         run: |

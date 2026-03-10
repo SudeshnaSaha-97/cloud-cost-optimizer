@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend-deployment
+  namespace: default
   labels:
     app: backend
 spec:
@@ -59,10 +60,4 @@ spec:
             timeoutSeconds: 2
             failureThreshold: 3
 
-        - name: cloudsql-proxy
-          image: gcr.io/cloudsql-docker/gce-proxy:1.33.3
-          command:
-            - "/cloud_sql_proxy"
-            - "-instances=cloud-cost-optimizer-488008:us-central1:cloud-cost-postgres=tcp:5432"
-          securityContext:
-            runAsNonRoot: true
+
