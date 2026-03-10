@@ -1,21 +1,29 @@
 # Backend Deployment
 resource "kubernetes_manifest" "backend_deployment" {
   manifest = yamldecode(file("${path.module}/../k8s/backend-deployment.yaml"))
+
+  depends_on = [google_container_cluster.primary]
 }
 
 # Backend Service
 resource "kubernetes_manifest" "backend_service" {
   manifest = yamldecode(file("${path.module}/../k8s/backend-service.yaml"))
+
+  depends_on = [google_container_cluster.primary]
 }
 
 # Frontend Deployment
 resource "kubernetes_manifest" "frontend_deployment" {
   manifest = yamldecode(file("${path.module}/../k8s/frontend-deployment.yaml"))
+
+  depends_on = [google_container_cluster.primary]
 }
 
 # Frontend Service
 resource "kubernetes_manifest" "frontend_service" {
   manifest = yamldecode(file("${path.module}/../k8s/frontend-service.yaml"))
+
+  depends_on = [google_container_cluster.primary]
 }
 
 resource "kubernetes_ingress_v1" "cloud_cost_ingress" {
