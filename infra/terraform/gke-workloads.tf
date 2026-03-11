@@ -82,4 +82,6 @@ resource "null_resource" "ingress_ip_fetch" {
 resource "kubernetes_manifest" "cloudsql_proxy_patch" {
   count = var.enable_cloudsql_postgres ? 1 : 0
   manifest = yamldecode(file("${path.module}/../k8s/cloudsql-proxy.yaml"))
+
+  depends_on = [google_container_cluster.primary]
 }
