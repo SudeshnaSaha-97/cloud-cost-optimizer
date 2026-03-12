@@ -38,10 +38,18 @@ jobs:
           terraform init
 
       # Terraform Format Check
-      - name: Terraform Format
+      - name: Terraform Format Check
+        id: fmt
         run: |
           cd infra/terraform
-          terraform fmt -check
+          terraform fmt -check -recursive
+
+      # Auto-format if check fails
+      - name: Terraform Auto Format
+        if: failure() && steps.fmt.outcome == 'failure'
+        run: |
+          cd infra/terraform
+          terraform fmt -recursive
 
       # Terraform Validate
       - name: Terraform Validate
