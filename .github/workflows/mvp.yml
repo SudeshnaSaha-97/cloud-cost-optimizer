@@ -37,19 +37,20 @@ jobs:
           export GOOGLE_APPLICATION_CREDENTIALS=${HOME}/gcp-key.json
           terraform init
 
-      # Terraform Format Check
-      - name: Terraform Format Check
-        id: fmt
+      # Terraform Format (Check + Auto-fix + Commit)
+      - name: Terraform Format
         run: |
           cd infra/terraform
-          terraform fmt -check -recursive
-
-      # Auto-format if check fails
-      - name: Terraform Auto Format
-        if: failure() && steps.fmt.outcome == 'failure'
-        run: |
-          cd infra/terraform
-          terraform fmt -recursive
+          if ! terraform fmt -check -recursive; then
+            echo "Formatting issues found. Running auto-fix..."
+            terraform fmt -recursive
+            cd ../..
+            git add infra/terraform/*.tf
+            git commit -m "CI: Auto-format Terraform files" || echo "No changes to commit"
+            git push
+          else
+            echo "All Terraform files are properly formatted."
+          fi
 
       # Terraform Validate
       - name: Terraform Validate
