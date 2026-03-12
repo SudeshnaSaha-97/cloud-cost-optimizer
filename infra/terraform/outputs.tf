@@ -76,3 +76,14 @@ output "frontend_health_status" {
   value       = try(chomp(file("${path.module}/frontend_status.txt")), "000")
   description = "Final frontend health status code after retries"
 }
+
+output "gke_endpoint" {
+  value       = google_container_cluster.primary.endpoint
+  description = "The endpoint of the GKE cluster"
+}
+
+output "gke_ca_certificate" {
+  value       = google_container_cluster.primary.master_auth[0].cluster_ca_certificate
+  description = "The cluster CA certificate"
+  sensitive   = true
+}

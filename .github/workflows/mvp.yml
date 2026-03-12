@@ -12,71 +12,155 @@ jobs:
   provision:
     runs-on: ubuntu-latest
     steps:
+      # Checkout repo
       - uses: actions/checkout@v4
 
+      # Setup Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
+      # Authenticate with GCP using service account key
       - name: Authenticate with GCP
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
+      # Write service account key to file for Terraform
       - name: Set GOOGLE_CREDENTIALS env
         run: |
           printf '%s' '${{ secrets.GCP_SA_KEY }}' > $HOME/gcp-key.json
 
-      - name: Terraform Init & Apply
+      # Terraform Init
+      - name: Terraform Init
         run: |
           cd infra/terraform
           export GOOGLE_APPLICATION_CREDENTIALS=${HOME}/gcp-key.json
           terraform init
-          terraform apply -auto-approve -var-file="terraform.tfvars"
+
+      # Terraform Format Check
+      - name: Terraform Format
+        run: |
+          cd infra/terraform
+          terraform fmt -check
+
+      # Terraform Validate
+      - name: Terraform Validate
+        run: |
+          cd infra/terraform
+          terraform validate
+
+      # Terraform Plan
+      - name: Terraform Plan
+        run: |
+          cd infra/terraform
+          export GOOGLE_APPLICATION_CREDENTIALS=${HOME}/gcp-key.json
+          terraform plan -out=tfplan -var-file="terraform.tfvars"
+
+      # Terraform Apply
+      - name: Terraform Apply
+        run: |
+          cd infra/terraform
+          export GOOGLE_APPLICATION_CREDENTIALS=${HOME}/gcp-key.json
+          terraform apply -auto-approve tfplan
+
+      # Export GKE Outputs for downstream jobs
+      - name: Export GKE Outputs
+        run: |
+          cd infra/terraform
+          echo "GKE_ENDPOINT=$(terraform output -raw gke_endpoint)" >> $GITHUB_ENV
+          echo "GKE_CA_CERT=$(terraform output -raw gke_ca_certificate)" >> $GITHUB_ENV
 
   test:
     runs-on: ubuntu-latest
     needs: provision
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
       - name: Install dependencies
         run: |
+          cd backend
           python -m pip install --upgrade pip
-          pip install -r backend/requirements.txt
+          pip install -r requirements.txt
+
+      # Configure kubectl with cluster outputs
+      - name: Configure kubectl
+        run: |
+          echo "$GKE_CA_CERT" > ca.crt
+          kubectl config set-cluster gke \
+            --server=$GKE_ENDPOINT \
+            --certificate-authority=ca.crt
+          kubectl config set-credentials sa \
+            --token=${{ secrets.GCP_SA_TOKEN }}
+          kubectl config set-context gke --cluster=gke --user=sa
+          kubectl config use-context gke
+
+      # Run unit + integration tests
       - name: Run tests
         run: |
           cd backend
-          PYTHONPATH=./ pytest app/tests --maxfail=1 --disable-warnings -q
+          PYTHONPATH=./ pytest app/tests \
+            --maxfail=1 --disable-warnings -q \
+            --cov=app --cov-report=term-missing
 
   build:
     runs-on: ubuntu-latest
     needs: test
     steps:
       - uses: actions/checkout@v4
+
+      # Setup Docker Buildx
       - uses: docker/setup-buildx-action@v3
 
-      - name: Configure Docker for Artifact Registry
+      # Authenticate with GCP
+      - name: Authenticate with GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      # Setup gcloud CLI
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: cloud-cost-optimizer-488008
+
+      # Configure Docker for Artifact Registry
+      - name: Configure Docker
         run: |
-          printf '%s' '${{ secrets.GCP_SA_KEY }}' > $HOME/gcp-key.json
-          gcloud auth activate-service-account --key-file=$HOME/gcp-key.json
           gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
+      # Build & Push Frontend
       - name: Build & Push Frontend
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
           push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           tags: |
             us-central1-docker.pkg.dev/cloud-cost-optimizer-488008/frontend-repo/frontend:latest
             us-central1-docker.pkg.dev/cloud-cost-optimizer-488008/frontend-repo/frontend:${{ github.sha }}
 
+      # Build & Push Backend
       - name: Build & Push Backend
         uses: docker/build-push-action@v5
         with:
           context: ./backend
           push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           tags: |
             us-central1-docker.pkg.dev/cloud-cost-optimizer-488008/backend-repo/backend:latest
             us-central1-docker.pkg.dev/cloud-cost-optimizer-488008/backend-repo/backend:${{ github.sha }}
@@ -93,15 +177,17 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      # Setup gcloud (needed for Terraform provider)
+      # Setup gcloud CLI
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: cloud-cost-optimizer-488008
 
       # Setup Terraform
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
 
-      # Initialize Terraform
+      # Initialize Terraform (infra only)
       - name: Terraform Init
         working-directory: infra/terraform
         run: terraform init
@@ -116,7 +202,7 @@ jobs:
         working-directory: infra/terraform
         run: terraform plan -out=tfplan
 
-      # Apply Terraform changes (deploy infra + workloads)
+      # Apply Terraform changes (infra only)
       - name: Terraform Apply
         working-directory: infra/terraform
         run: terraform apply -auto-approve tfplan
@@ -135,14 +221,26 @@ jobs:
             exit 1
           fi
 
-      # Update Frontend Deployment Image via kubectl set image
+      # Configure kubectl with cluster outputs
+      - name: Configure kubectl
+        run: |
+          echo "$GKE_CA_CERT" > ca.crt
+          kubectl config set-cluster gke \
+            --server=$GKE_ENDPOINT \
+            --certificate-authority=ca.crt
+          kubectl config set-credentials sa \
+            --token=${{ secrets.GCP_SA_TOKEN }}
+          kubectl config set-context gke --cluster=gke --user=sa
+          kubectl config use-context gke
+
+      # Update Frontend Deployment Image
       - name: Update Frontend Deployment Image
         run: |
           kubectl set image deployment/frontend-deployment \
             frontend=us-central1-docker.pkg.dev/cloud-cost-optimizer-488008/frontend-repo/frontend:${{ github.sha }}
           kubectl rollout status deployment/frontend-deployment
 
-      # Update Backend Deployment Image via kubectl set image
+      # Update Backend Deployment Image
       - name: Update Backend Deployment Image
         run: |
           kubectl set image deployment/backend-deployment \
@@ -155,22 +253,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Authenticate with GCP
       - name: Authenticate with GCP
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
+      # Setup Terraform
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
 
+      # Initialize Terraform
       - name: Terraform Init
         working-directory: infra/terraform
         run: terraform init
 
+      # Run smoke test null resources only
       - name: Terraform Apply Smoke Tests
         working-directory: infra/terraform
-        run: terraform apply -auto-approve -target=null_resource.backend_smoke_test -target=null_resource.frontend_smoke_test
+        run: terraform apply -auto-approve \
+          -target=null_resource.backend_smoke_test \
+          -target=null_resource.frontend_smoke_test
 
+      # Collect health status from outputs
       - name: Collect Health Status
         working-directory: infra/terraform
         run: |
@@ -188,6 +293,19 @@ jobs:
           [ "$BACKEND_STATUS" = "200" ] || exit 1
           [ "$FRONTEND_STATUS" = "200" ] || exit 1
 
+      # Configure kubectl before pod/service summary
+      - name: Configure kubectl
+        run: |
+          echo "$GKE_CA_CERT" > ca.crt
+          kubectl config set-cluster gke \
+            --server=$GKE_ENDPOINT \
+            --certificate-authority=ca.crt
+          kubectl config set-credentials sa \
+            --token=${{ secrets.GCP_SA_TOKEN }}
+          kubectl config set-context gke --cluster=gke --user=sa
+          kubectl config use-context gke
+
+      # Pods & Services Summary
       - name: Pods & Services Summary
         run: |
           PODS="$(kubectl get pods --no-headers | awk '{print $3}' | sort | uniq -c | sed 's/^ *//')"
@@ -197,15 +315,16 @@ jobs:
           echo "SERVICES=$SERVICES" >> $GITHUB_ENV
           echo "INGRESS=$INGRESS" >> $GITHUB_ENV
 
+      # Prepare Slack Payload
       - name: Prepare Slack Payload
         run: |
           TEST_STATUS="${{ needs.test.result }}"
           DEPLOY_STATUS="${{ needs.deploy.result }}"
           SMOKE_STATUS="${{ job.status }}"
 
-          TEST_ICON="❌"; if [ "$TEST_STATUS" = "success" ]; then TEST_ICON="✅"; fi
-          DEPLOY_ICON="❌"; if [ "$DEPLOY_STATUS" = "success" ]; then DEPLOY_ICON="✅"; fi
-          SMOKE_ICON="❌"; if [ "$SMOKE_STATUS" = "success" ]; then SMOKE_ICON="✅"; fi
+          TEST_ICON="❌"; [ "$TEST_STATUS" = "success" ] && TEST_ICON="✅"
+          DEPLOY_ICON="❌"; [ "$DEPLOY_STATUS" = "success" ] && DEPLOY_ICON="✅"
+          SMOKE_ICON="❌"; [ "$SMOKE_STATUS" = "success" ] && SMOKE_ICON="✅"
 
           jq -n \
             --arg status "${{ job.status }}" \
@@ -245,9 +364,11 @@ jobs:
               ]
             }' > slack-payload.json
 
+      # Validate Slack JSON
       - name: Validate Slack JSON
         run: jq . slack-payload.json
 
+      # Notify Slack
       - name: Notify Slack
         if: always()
         uses: slackapi/slack-github-action@v1.27.0

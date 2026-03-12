@@ -15,6 +15,12 @@ resource "google_container_cluster" "primary" {
   }
 
   deletion_protection = false
+
+  master_auth {
+    client_certificate_config {
+      issue_client_certificate = false
+    }
+  }
 }
 
 resource "google_container_node_pool" "frontend_pool" {
