@@ -1,33 +1,21 @@
-# Backend Deployment
 resource "kubernetes_manifest" "backend_deployment" {
-  provider = kubernetes
-  manifest = yamldecode(file("${path.module}/../k8s/backend-deployment.yaml"))
-
-  depends_on = [google_container_cluster.primary]
+  manifest    = yamldecode(file("${path.module}/../k8s/backend-deployment.yaml"))
+  depends_on  = [google_container_cluster.primary]
 }
 
-# Backend Service
 resource "kubernetes_manifest" "backend_service" {
-  provider = kubernetes
-  manifest = yamldecode(file("${path.module}/../k8s/backend-service.yaml"))
-
-  depends_on = [google_container_cluster.primary]
+  manifest    = yamldecode(file("${path.module}/../k8s/backend-service.yaml"))
+  depends_on  = [google_container_cluster.primary]
 }
 
-# Frontend Deployment
 resource "kubernetes_manifest" "frontend_deployment" {
-  provider = kubernetes
-  manifest = yamldecode(file("${path.module}/../k8s/frontend-deployment.yaml"))
-
-  depends_on = [google_container_cluster.primary]
+  manifest    = yamldecode(file("${path.module}/../k8s/frontend-deployment.yaml"))
+  depends_on  = [google_container_cluster.primary]
 }
 
-# Frontend Service
 resource "kubernetes_manifest" "frontend_service" {
-  provider = kubernetes
-  manifest = yamldecode(file("${path.module}/../k8s/frontend-service.yaml"))
-
-  depends_on = [google_container_cluster.primary]
+  manifest    = yamldecode(file("${path.module}/../k8s/frontend-service.yaml"))
+  depends_on  = [google_container_cluster.primary]
 }
 
 resource "kubernetes_ingress_v1" "cloud_cost_ingress" {
@@ -48,9 +36,7 @@ resource "kubernetes_ingress_v1" "cloud_cost_ingress" {
           backend {
             service {
               name = "backend-service"
-              port {
-                number = 8000
-              }
+              port { number = 8000 }
             }
           }
         }
@@ -60,15 +46,18 @@ resource "kubernetes_ingress_v1" "cloud_cost_ingress" {
           backend {
             service {
               name = "frontend-service"
-              port {
-                number = 80
-              }
+              port { number = 80 }
             }
           }
         }
       }
     }
   }
+
+  depends_on = [
+    kubernetes_manifest.backend_service,
+    kubernetes_manifest.frontend_service
+  ]
 }
 
 resource "null_resource" "ingress_ip_fetch" {
@@ -76,12 +65,12 @@ resource "null_resource" "ingress_ip_fetch" {
     command     = "kubectl get ingress cloud-cost-ingress -n default -o jsonpath='{.status.loadBalancer.ingress[0].ip}' > ingress_ip.txt"
     interpreter = ["/bin/bash", "-c"]
   }
+
+  depends_on = [kubernetes_ingress_v1.cloud_cost_ingress]
 }
 
-# Cloud SQL Proxy
 resource "kubernetes_manifest" "cloudsql_proxy_patch" {
-  count    = var.enable_cloudsql_postgres ? 1 : 0
-  manifest = yamldecode(file("${path.module}/../k8s/cloudsql-proxy.yaml"))
-
+  count      = var.enable_cloudsql_postgres ? 1 : 0
+  manifest   = yamldecode(file("${path.module}/../k8s/cloudsql-proxy.yaml"))
   depends_on = [google_container_cluster.primary]
 }
