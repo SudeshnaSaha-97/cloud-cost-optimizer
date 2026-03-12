@@ -6,7 +6,7 @@ on:
     branches: [ main ]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   provision:
@@ -45,9 +45,11 @@ jobs:
             echo "Formatting issues found. Running auto-fix..."
             terraform fmt -recursive
             cd ../..
+            git config --global user.name "Sudeshna Saha"
+            git config --global user.email "sudeshnasaha97@gmail.com"
             git add infra/terraform/*.tf
             git commit -m "CI: Auto-format Terraform files" || echo "No changes to commit"
-            git push
+            git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} HEAD:${{ github.ref }}
           else
             echo "All Terraform files are properly formatted."
           fi
