@@ -11,7 +11,7 @@ resource "google_project_iam_member" "ci_cd_gke_deploy" {
   role    = "roles/container.admin"
   member  = "serviceAccount:${var.service_account}"
 }
- 
+
 variable "service_account" {
   description = "Service account email used by CI/CD pipelines"
   type        = string

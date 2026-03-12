@@ -4,11 +4,11 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "~> 5.45"   # stable for GKE, Cloud SQL, Artifact Registry
+      version = "~> 5.45" # stable for GKE, Cloud SQL, Artifact Registry
     }
     kubernetes = {
       source  = "hashicorp/kubernetes"
-      version = "~> 2.20"   # stable, supports kubernetes_manifest
+      version = "~> 2.20" # stable, supports kubernetes_manifest
     }
     null = {
       source  = "hashicorp/null"

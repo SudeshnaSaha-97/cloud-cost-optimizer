@@ -1,6 +1,6 @@
 resource "null_resource" "backend_smoke_test" {
   provisioner "local-exec" {
-    command = <<EOT
+    command     = <<EOT
       INGRESS_IP=$(kubectl get ingress cloud-cost-ingress -n default -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
       for i in $(seq 1 5); do
         STATUS=$(curl -s -o /dev/null -w "%%{http_code}" "http://$INGRESS_IP/api/health")
@@ -20,7 +20,7 @@ resource "null_resource" "backend_smoke_test" {
 
 resource "null_resource" "frontend_smoke_test" {
   provisioner "local-exec" {
-    command = <<EOT
+    command     = <<EOT
       INGRESS_IP=$(kubectl get ingress cloud-cost-ingress -n default -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
       for i in $(seq 1 5); do
         STATUS=$(curl -s -o /dev/null -w "%%{http_code}" "http://$INGRESS_IP/")

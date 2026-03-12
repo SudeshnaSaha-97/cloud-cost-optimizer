@@ -73,14 +73,14 @@ resource "kubernetes_ingress_v1" "cloud_cost_ingress" {
 
 resource "null_resource" "ingress_ip_fetch" {
   provisioner "local-exec" {
-    command = "kubectl get ingress cloud-cost-ingress -n default -o jsonpath='{.status.loadBalancer.ingress[0].ip}' > ingress_ip.txt"
+    command     = "kubectl get ingress cloud-cost-ingress -n default -o jsonpath='{.status.loadBalancer.ingress[0].ip}' > ingress_ip.txt"
     interpreter = ["/bin/bash", "-c"]
   }
 }
 
 # Cloud SQL Proxy
 resource "kubernetes_manifest" "cloudsql_proxy_patch" {
-  count = var.enable_cloudsql_postgres ? 1 : 0
+  count    = var.enable_cloudsql_postgres ? 1 : 0
   manifest = yamldecode(file("${path.module}/../k8s/cloudsql-proxy.yaml"))
 
   depends_on = [google_container_cluster.primary]
