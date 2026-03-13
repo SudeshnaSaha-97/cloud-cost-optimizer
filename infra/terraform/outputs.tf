@@ -6,9 +6,15 @@ output "gke_cluster_name" {
   description = "Name of the GKE cluster"
 }
 
-output "gke_cluster_endpoint" {
+output "gke_endpoint" {
   value       = google_container_cluster.primary.endpoint
   description = "Endpoint of the GKE cluster"
+}
+
+output "gke_ca_certificate" {
+  value       = google_container_cluster.primary.master_auth[0].cluster_ca_certificate
+  description = "The cluster CA certificate"
+  sensitive   = true
 }
 
 output "gke_cluster_location" {
@@ -53,9 +59,6 @@ output "jenkins_vm_ip" {
 # -----------------------------
 # Ingress Outputs
 # -----------------------------
-# -----------------------------
-# Ingress Outputs
-# -----------------------------
 output "ingress_ip" {
   value       = try(chomp(file("${path.module}/ingress_ip.txt")), "")
   description = "Public IP address assigned to the GKE ingress"
@@ -77,13 +80,3 @@ output "frontend_health_status" {
   description = "Final frontend health status code after retries"
 }
 
-output "gke_endpoint" {
-  value       = google_container_cluster.primary.endpoint
-  description = "The endpoint of the GKE cluster"
-}
-
-output "gke_ca_certificate" {
-  value       = google_container_cluster.primary.master_auth[0].cluster_ca_certificate
-  description = "The cluster CA certificate"
-  sensitive   = true
-}

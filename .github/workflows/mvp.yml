@@ -18,6 +18,8 @@ jobs:
       # Setup Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.7   # pin CLI version for consistency
 
       # Authenticate with GCP using service account key
       - name: Authenticate with GCP
@@ -25,16 +27,10 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      # Write service account key to file for Terraform
-      - name: Set GOOGLE_CREDENTIALS env
-        run: |
-          printf '%s' '${{ secrets.GCP_SA_KEY }}' > $HOME/gcp-key.json
-
       # Terraform Init
       - name: Terraform Init
         run: |
           cd infra/terraform
-          export GOOGLE_APPLICATION_CREDENTIALS=${HOME}/gcp-key.json
           terraform init
 
       # Terraform Format (Check + Auto-fix + Commit)
@@ -42,7 +38,6 @@ jobs:
         run: |
           cd infra/terraform
           if ! terraform fmt -check -recursive; then
-            echo "Formatting issues found. Running auto-fix..."
             terraform fmt -recursive
             cd ../..
             git config --global user.name "Sudeshna Saha"
@@ -50,8 +45,6 @@ jobs:
             git add infra/terraform/*.tf
             git commit -m "CI: Auto-format Terraform files" || echo "No changes to commit"
             git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} HEAD:${{ github.ref }}
-          else
-            echo "All Terraform files are properly formatted."
           fi
 
       # Terraform Validate
@@ -60,19 +53,33 @@ jobs:
           cd infra/terraform
           terraform validate
 
-      # Terraform Plan
-      - name: Terraform Plan
+      # Terraform Plan (Cluster + Node Pools only)
+      - name: Terraform Plan (Cluster)
         run: |
           cd infra/terraform
-          export GOOGLE_APPLICATION_CREDENTIALS=${HOME}/gcp-key.json
-          terraform plan -out=tfplan -var-file="terraform.tfvars"
+          terraform plan -out=tfplan-cluster \
+            -target=google_container_cluster.primary \
+            -target=google_container_node_pool.frontend_pool \
+            -target=google_container_node_pool.backend_pool \
+            -var-file="terraform.tfvars"
 
-      # Terraform Apply
-      - name: Terraform Apply
+      # Terraform Apply (Cluster)
+      - name: Terraform Apply (Cluster)
         run: |
           cd infra/terraform
-          export GOOGLE_APPLICATION_CREDENTIALS=${HOME}/gcp-key.json
-          terraform apply -auto-approve tfplan
+          terraform apply -auto-approve tfplan-cluster
+
+      # Terraform Plan (Workloads)
+      - name: Terraform Plan (Workloads)
+        run: |
+          cd infra/terraform
+          terraform plan -out=tfplan-workloads -var-file="terraform.tfvars"
+
+      # Terraform Apply (Workloads)
+      - name: Terraform Apply (Workloads)
+        run: |
+          cd infra/terraform
+          terraform apply -auto-approve tfplan-workloads
 
       # Export GKE Outputs for downstream jobs
       - name: Export GKE Outputs
@@ -194,29 +201,45 @@ jobs:
         with:
           project_id: cloud-cost-optimizer-488008
 
-      # Setup Terraform
+      # Setup Terraform (pin version)
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.7
 
-      # Initialize Terraform (infra only)
+      # Terraform Init
       - name: Terraform Init
         working-directory: infra/terraform
         run: terraform init
 
-      # Validate Terraform
+      # Terraform Validate
       - name: Terraform Validate
         working-directory: infra/terraform
         run: terraform validate
 
-      # Plan Terraform changes
-      - name: Terraform Plan
+      # Terraform Plan (Cluster only)
+      - name: Terraform Plan (Cluster)
         working-directory: infra/terraform
-        run: terraform plan -out=tfplan
+        run: terraform plan -out=tfplan-cluster \
+          -target=google_container_cluster.primary \
+          -target=google_container_node_pool.frontend_pool \
+          -target=google_container_node_pool.backend_pool \
+          -var-file="terraform.tfvars"
 
-      # Apply Terraform changes (infra only)
-      - name: Terraform Apply
+      # Terraform Apply (Cluster)
+      - name: Terraform Apply (Cluster)
         working-directory: infra/terraform
-        run: terraform apply -auto-approve tfplan
+        run: terraform apply -auto-approve tfplan-cluster
+
+      # Terraform Plan (Workloads)
+      - name: Terraform Plan (Workloads)
+        working-directory: infra/terraform
+        run: terraform plan -out=tfplan-workloads -var-file="terraform.tfvars"
+
+      # Terraform Apply (Workloads)
+      - name: Terraform Apply (Workloads)
+        working-directory: infra/terraform
+        run: terraform apply -auto-approve tfplan-workloads
 
       # Extract Ingress IP from Terraform output
       - name: Get Ingress IP
