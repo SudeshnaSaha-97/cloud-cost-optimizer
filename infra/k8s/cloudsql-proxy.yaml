@@ -4,7 +4,13 @@ metadata:
   name: backend-deployment
   namespace: default
 spec:
+  selector:
+    matchLabels:
+      app: backend
   template:
+    metadata:
+      labels:
+        app: backend
     spec:
       containers:
         - name: cloudsql-proxy

@@ -62,7 +62,12 @@ resource "kubernetes_ingress_v1" "cloud_cost_ingress" {
 
 resource "null_resource" "ingress_ip_fetch" {
   provisioner "local-exec" {
-    command     = "kubectl get ingress cloud-cost-ingress -n default -o jsonpath='{.status.loadBalancer.ingress[0].ip}' > ingress_ip.txt"
+    environment = {
+      KUBECONFIG = "${path.module}/../kubeconfig"
+    }
+    command = <<EOT
+    kubectl get ingress cloud-cost-ingress -n default -o jsonpath='{.status.loadBalancer.ingress[0].ip}' > ingress_ip.txt
+  EOT
     interpreter = ["/bin/bash", "-c"]
   }
 
