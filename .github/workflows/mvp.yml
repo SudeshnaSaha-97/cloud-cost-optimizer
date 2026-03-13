@@ -12,16 +12,15 @@ jobs:
   provision:
     runs-on: ubuntu-latest
     steps:
-      # Checkout repo
       - uses: actions/checkout@v4
 
       # Setup Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.5.7   # pin CLI version for consistency
+          terraform_version: 1.5.7
 
-      # Authenticate with GCP using service account key
+      # Authenticate with GCP
       - name: Authenticate with GCP
         uses: google-github-actions/auth@v2
         with:
@@ -33,27 +32,13 @@ jobs:
           cd infra/terraform
           terraform init
 
-      # Terraform Format (Check + Auto-fix + Commit)
-      - name: Terraform Format
-        run: |
-          cd infra/terraform
-          if ! terraform fmt -check -recursive; then
-            terraform fmt -recursive
-            cd ../..
-            git config --global user.name "Sudeshna Saha"
-            git config --global user.email "sudeshnasaha97@gmail.com"
-            git add infra/terraform/*.tf
-            git commit -m "CI: Auto-format Terraform files" || echo "No changes to commit"
-            git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} HEAD:${{ github.ref }}
-          fi
-
       # Terraform Validate
       - name: Terraform Validate
         run: |
           cd infra/terraform
           terraform validate
 
-      # Terraform Plan (Cluster + Node Pools only)
+      # Terraform Plan (Cluster)
       - name: Terraform Plan (Cluster)
         run: |
           cd infra/terraform
@@ -69,6 +54,25 @@ jobs:
           cd infra/terraform
           terraform apply -auto-approve tfplan-cluster
 
+      # Export GKE Outputs
+      - name: Export GKE Outputs
+        run: |
+          cd infra/terraform
+          echo "GKE_ENDPOINT=$(terraform output -raw gke_endpoint)" >> $GITHUB_ENV
+          echo "GKE_CA_CERT=$(terraform output -raw gke_ca_certificate)" >> $GITHUB_ENV
+
+      # Configure kubectl
+      - name: Configure kubectl
+        run: |
+          echo "$GKE_CA_CERT" > ca.crt
+          kubectl config set-cluster gke \
+            --server=https://$GKE_ENDPOINT \
+            --certificate-authority=ca.crt
+          kubectl config set-credentials sa \
+            --token=${{ secrets.GCP_SA_TOKEN }}
+          kubectl config set-context gke --cluster=gke --user=sa
+          kubectl config use-context gke
+
       # Terraform Plan (Workloads)
       - name: Terraform Plan (Workloads)
         run: |
@@ -80,13 +84,6 @@ jobs:
         run: |
           cd infra/terraform
           terraform apply -auto-approve tfplan-workloads
-
-      # Export GKE Outputs for downstream jobs
-      - name: Export GKE Outputs
-        run: |
-          cd infra/terraform
-          echo "GKE_ENDPOINT=$(terraform output -raw gke_endpoint)" >> $GITHUB_ENV
-          echo "GKE_CA_CERT=$(terraform output -raw gke_ca_certificate)" >> $GITHUB_ENV
 
   test:
     runs-on: ubuntu-latest
@@ -201,7 +198,7 @@ jobs:
         with:
           project_id: cloud-cost-optimizer-488008
 
-      # Setup Terraform (pin version)
+      # Setup Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -217,7 +214,7 @@ jobs:
         working-directory: infra/terraform
         run: terraform validate
 
-      # Terraform Plan (Cluster only)
+      # Terraform Plan (Cluster)
       - name: Terraform Plan (Cluster)
         working-directory: infra/terraform
         run: terraform plan -out=tfplan-cluster \
@@ -231,6 +228,25 @@ jobs:
         working-directory: infra/terraform
         run: terraform apply -auto-approve tfplan-cluster
 
+      # Export GKE Outputs
+      - name: Export GKE Outputs
+        working-directory: infra/terraform
+        run: |
+          echo "GKE_ENDPOINT=$(terraform output -raw gke_endpoint)" >> $GITHUB_ENV
+          echo "GKE_CA_CERT=$(terraform output -raw gke_ca_certificate)" >> $GITHUB_ENV
+
+      # Configure kubectl
+      - name: Configure kubectl
+        run: |
+          echo "$GKE_CA_CERT" > ca.crt
+          kubectl config set-cluster gke \
+            --server=https://$GKE_ENDPOINT \
+            --certificate-authority=ca.crt
+          kubectl config set-credentials sa \
+            --token=${{ secrets.GCP_SA_TOKEN }}
+          kubectl config set-context gke --cluster=gke --user=sa
+          kubectl config use-context gke
+
       # Terraform Plan (Workloads)
       - name: Terraform Plan (Workloads)
         working-directory: infra/terraform
@@ -240,32 +256,6 @@ jobs:
       - name: Terraform Apply (Workloads)
         working-directory: infra/terraform
         run: terraform apply -auto-approve tfplan-workloads
-
-      # Extract Ingress IP from Terraform output
-      - name: Get Ingress IP
-        id: ingress
-        working-directory: infra/terraform
-        run: |
-          IP=$(terraform output -raw ingress_ip || true)
-          if [ -n "$IP" ]; then
-            echo "INGRESS_IP=$IP" >> $GITHUB_ENV
-            echo "Ingress IP: $IP"
-          else
-            echo "Ingress IP not found"
-            exit 1
-          fi
-
-      # Configure kubectl with cluster outputs
-      - name: Configure kubectl
-        run: |
-          echo "$GKE_CA_CERT" > ca.crt
-          kubectl config set-cluster gke \
-            --server=$GKE_ENDPOINT \
-            --certificate-authority=ca.crt
-          kubectl config set-credentials sa \
-            --token=${{ secrets.GCP_SA_TOKEN }}
-          kubectl config set-context gke --cluster=gke --user=sa
-          kubectl config use-context gke
 
       # Update Frontend Deployment Image
       - name: Update Frontend Deployment Image
