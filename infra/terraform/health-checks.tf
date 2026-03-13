@@ -1,17 +1,20 @@
 resource "null_resource" "backend_smoke_test" {
   provisioner "local-exec" {
+    environment = {
+      KUBECONFIG = "${path.module}/../kubeconfig"
+    }
     command = <<EOT
       for i in $(seq 1 20); do
         INGRESS_IP=$(kubectl get ingress cloud-cost-ingress -n default -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || true)
         if [ -n "$INGRESS_IP" ]; then
           echo "Ingress IP: $INGRESS_IP"
           for j in $(seq 1 10); do
-            STATUS=$(curl -s -o /dev/null -w "%%{http_code}" "http://$INGRESS_IP/api/health")
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://$INGRESS_IP/api/health")
             if [ "$STATUS" = "200" ]; then
               echo $STATUS > backend_status.txt
               exit 0
             fi
-            echo "Backend health check attempt $j failed (HTTP $STATUS), retrying in 20s..."
+            echo "Backend health check attempt $j failed (HTTP $STATUS), retrying in 30s..."
             sleep 30
           done
           echo "000" > backend_status.txt
@@ -29,18 +32,21 @@ resource "null_resource" "backend_smoke_test" {
 
 resource "null_resource" "frontend_smoke_test" {
   provisioner "local-exec" {
+    environment = {
+      KUBECONFIG = "${path.module}/../kubeconfig"
+    }
     command = <<EOT
       for i in $(seq 1 20); do
         INGRESS_IP=$(kubectl get ingress cloud-cost-ingress -n default -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || true)
         if [ -n "$INGRESS_IP" ]; then
           echo "Ingress IP: $INGRESS_IP"
           for j in $(seq 1 10); do
-            STATUS=$(curl -s -o /dev/null -w "%%{http_code}" "http://$INGRESS_IP/")
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://$INGRESS_IP/")
             if [ "$STATUS" = "200" ]; then
               echo $STATUS > frontend_status.txt
               exit 0
             fi
-            echo "Frontend health check attempt $j failed (HTTP $STATUS), retrying in 20s..."
+            echo "Frontend health check attempt $j failed (HTTP $STATUS), retrying in 30s..."
             sleep 30
           done
           echo "000" > frontend_status.txt
