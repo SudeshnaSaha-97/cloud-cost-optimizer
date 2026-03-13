@@ -9,7 +9,7 @@ resource "null_resource" "backend_smoke_test" {
         if [ -n "$INGRESS_IP" ]; then
           echo "Ingress IP: $INGRESS_IP"
           for j in $(seq 1 10); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://$INGRESS_IP/api/health")
+            STATUS=$(curl -s -o /dev/null -w "%%{http_code}" "http://$INGRESS_IP/api/health")
             if [ "$STATUS" = "200" ]; then
               echo $STATUS > backend_status.txt
               exit 0
@@ -41,7 +41,7 @@ resource "null_resource" "frontend_smoke_test" {
         if [ -n "$INGRESS_IP" ]; then
           echo "Ingress IP: $INGRESS_IP"
           for j in $(seq 1 10); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://$INGRESS_IP/")
+            STATUS=$(curl -s -o /dev/null -w "%%{http_code}" "http://$INGRESS_IP/")
             if [ "$STATUS" = "200" ]; then
               echo $STATUS > frontend_status.txt
               exit 0
