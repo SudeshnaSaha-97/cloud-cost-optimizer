@@ -14,54 +14,43 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Setup Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.5.7
 
-      # Authenticate with GCP
       - name: Authenticate with GCP
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      # Terraform Init
       - name: Terraform Init
         run: |
           cd infra/terraform
           terraform init
 
-      # Terraform Validate
       - name: Terraform Validate
         run: |
           cd infra/terraform
           terraform validate
 
-      # Terraform Plan (Cluster)
+      # Cluster Apply (no -target)
       - name: Terraform Plan (Cluster)
         run: |
           cd infra/terraform
-          terraform plan -out=tfplan-cluster \
-            -target=google_container_cluster.primary \
-            -target=google_container_node_pool.frontend_pool \
-            -target=google_container_node_pool.backend_pool \
-            -var-file="terraform.tfvars"
+          terraform plan -out=tfplan-cluster -var-file="terraform.tfvars"
 
-      # Terraform Apply (Cluster)
       - name: Terraform Apply (Cluster)
         run: |
           cd infra/terraform
           terraform apply -auto-approve tfplan-cluster
 
-      # Export GKE Outputs
       - name: Export GKE Outputs
         run: |
           cd infra/terraform
           echo "GKE_ENDPOINT=$(terraform output -raw gke_endpoint)" >> $GITHUB_ENV
           echo "GKE_CA_CERT=$(terraform output -raw gke_ca_certificate)" >> $GITHUB_ENV
 
-      # Configure kubectl
       - name: Configure kubectl
         run: |
           echo "$GKE_CA_CERT" > ca.crt
@@ -75,13 +64,12 @@ jobs:
           kubectl config set-context gke --cluster=gke --user=sa --kubeconfig=infra/kubeconfig
           kubectl config use-context gke --kubeconfig=infra/kubeconfig
 
-      # Terraform Plan (Workloads)
+      # Workloads Apply
       - name: Terraform Plan (Workloads)
         run: |
           cd infra/terraform
           terraform plan -out=tfplan-workloads -var-file="terraform.tfvars"
 
-      # Terraform Apply (Workloads)
       - name: Terraform Apply (Workloads)
         run: |
           cd infra/terraform
