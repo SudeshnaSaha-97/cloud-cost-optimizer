@@ -33,3 +33,11 @@ output "cloudsql_instance_name" {
   value       = try(google_sql_database_instance.postgres[0].name, "")
   description = "Cloud SQL instance name (empty if disabled)"
 }
+
+output "backend_repo_url" {
+  value = "us-central1-docker.pkg.dev/${var.project_id}/backend-repo/backend:latest"
+}
+
+output "frontend_repo_url" {
+  value = "us-central1-docker.pkg.dev/${var.project_id}/frontend-repo/frontend:latest"
+}

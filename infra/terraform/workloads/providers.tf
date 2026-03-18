@@ -37,8 +37,15 @@ data "terraform_remote_state" "cluster" {
 }
 
 provider "kubernetes" {
-  host                   = "https://${data.terraform_remote_state.cluster.outputs.gke_endpoint}"
-  cluster_ca_certificate = base64decode(data.terraform_remote_state.cluster.outputs.gke_ca_certificate)
+  host                   = "https://${var.gke_endpoint}"
+  cluster_ca_certificate = base64decode(var.gke_ca_certificate)
   token                  = data.google_client_config.default.access_token
 }
 
+provider "helm" {
+  kubernetes {
+    host                   = "https://${var.gke_endpoint}"
+    cluster_ca_certificate = base64decode(var.gke_ca_certificate)
+    token                  = data.google_client_config.default.access_token
+  }
+}
