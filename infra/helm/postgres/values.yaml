@@ -1,0 +1,18 @@
+replicaCount: 1
+
+image:
+  repository: postgres
+  tag: "15"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 5432
+
+nodePool: postgres-pool
+
+db:
+  secretName: postgres-secret
+  userKey: username
+  passwordKey: password
+  database: cloudcost

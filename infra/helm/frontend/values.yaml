@@ -1,0 +1,15 @@
+replicaCount: 2
+
+image:
+  repository: us-central1-docker.pkg.dev/cloud-cost-optimizer-488008/frontend-repo/frontend
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+
+nodePool: frontend-pool
+
+env:
+  apiUrl: "http://backend-service:8000"

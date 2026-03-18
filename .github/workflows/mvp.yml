@@ -11,6 +11,16 @@ permissions:
 jobs:
   provision:
     runs-on: ubuntu-latest
+    env:
+      # Map GitHub secrets to Terraform variables
+      TF_VAR_cloudsql_db_user: ${{ secrets.CLOUDSQL_DB_USER }}
+      TF_VAR_cloudsql_db_password: ${{ secrets.CLOUDSQL_DB_PASSWORD }}
+      TF_VAR_cloudsql_db_name: ${{ secrets.CLOUDSQL_DB_NAME }}
+      TF_VAR_gcp_service_account_json: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
+      TF_VAR_postgres_user: ${{ secrets.POSTGRES_USER }}
+      TF_VAR_postgres_password: ${{ secrets.POSTGRES_PASSWORD }}
+      TF_VAR_postgres_db: ${{ secrets.POSTGRES_DB }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -34,22 +44,21 @@ jobs:
           cd infra/terraform
           terraform validate
 
-      # Cluster Apply (no -target)
-      - name: Terraform Plan (Cluster)
+      - name: Terraform Plan
         run: |
           cd infra/terraform
-          terraform plan -out=tfplan-cluster -var-file="terraform.tfvars"
+          terraform plan -out=tfplan
 
-      - name: Terraform Apply (Cluster)
+      - name: Terraform Apply
         run: |
           cd infra/terraform
-          terraform apply -auto-approve tfplan-cluster
+          terraform apply -auto-approve tfplan
 
       - name: Export GKE Outputs
         run: |
           cd infra/terraform
-          echo "GKE_ENDPOINT=$(terraform output -raw gke_endpoint)" >> $GITHUB_ENV
-          echo "GKE_CA_CERT=$(terraform output -raw gke_ca_certificate)" >> $GITHUB_ENV
+          echo "GKE_ENDPOINT=$(terraform output -raw cluster_outputs.gke_endpoint)" >> $GITHUB_ENV
+          echo "GKE_CA_CERT=$(terraform output -raw cluster_outputs.gke_ca_certificate)" >> $GITHUB_ENV
 
       - name: Configure kubectl
         run: |
@@ -63,17 +72,6 @@ jobs:
             --kubeconfig=infra/kubeconfig
           kubectl config set-context gke --cluster=gke --user=sa --kubeconfig=infra/kubeconfig
           kubectl config use-context gke --kubeconfig=infra/kubeconfig
-
-      # Workloads Apply
-      - name: Terraform Plan (Workloads)
-        run: |
-          cd infra/terraform
-          terraform plan -out=tfplan-workloads -var-file="terraform.tfvars"
-
-      - name: Terraform Apply (Workloads)
-        run: |
-          cd infra/terraform
-          terraform apply -auto-approve tfplan-workloads
 
   test:
     runs-on: ubuntu-latest
@@ -100,17 +98,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # Configure kubectl with cluster outputs
+      # Configure kubectl with cluster outputs from provision job
       - name: Configure kubectl
         run: |
           echo "$GKE_CA_CERT" > ca.crt
           kubectl config set-cluster gke \
-            --server=$GKE_ENDPOINT \
-            --certificate-authority=ca.crt
+            --server=https://$GKE_ENDPOINT \
+            --certificate-authority=ca.crt \
+            --kubeconfig=infra/kubeconfig
           kubectl config set-credentials sa \
-            --token=${{ secrets.GCP_SA_TOKEN }}
-          kubectl config set-context gke --cluster=gke --user=sa
-          kubectl config use-context gke
+            --token=${{ secrets.GCP_SA_TOKEN }} \
+            --kubeconfig=infra/kubeconfig
+          kubectl config set-context gke --cluster=gke --user=sa --kubeconfig=infra/kubeconfig
+          kubectl config use-context gke --kubeconfig=infra/kubeconfig
 
       # Run unit + integration tests
       - name: Run tests
@@ -194,36 +194,29 @@ jobs:
         with:
           terraform_version: 1.5.7
 
-      # Terraform Init
+      # Terraform Init + Apply (root orchestrator)
       - name: Terraform Init
         working-directory: infra/terraform
         run: terraform init
 
-      # Terraform Validate
       - name: Terraform Validate
         working-directory: infra/terraform
         run: terraform validate
 
-      # Terraform Plan (Cluster)
-      - name: Terraform Plan (Cluster)
+      - name: Terraform Plan
         working-directory: infra/terraform
-        run: terraform plan -out=tfplan-cluster \
-          -target=google_container_cluster.primary \
-          -target=google_container_node_pool.frontend_pool \
-          -target=google_container_node_pool.backend_pool \
-          -var-file="terraform.tfvars"
+        run: terraform plan -out=tfplan -var-file="terraform.tfvars"
 
-      # Terraform Apply (Cluster)
-      - name: Terraform Apply (Cluster)
+      - name: Terraform Apply
         working-directory: infra/terraform
-        run: terraform apply -auto-approve tfplan-cluster
+        run: terraform apply -auto-approve tfplan
 
       # Export GKE Outputs
       - name: Export GKE Outputs
         working-directory: infra/terraform
         run: |
-          echo "GKE_ENDPOINT=$(terraform output -raw gke_endpoint)" >> $GITHUB_ENV
-          echo "GKE_CA_CERT=$(terraform output -raw gke_ca_certificate)" >> $GITHUB_ENV
+          echo "GKE_ENDPOINT=$(terraform output -raw cluster_outputs.gke_endpoint)" >> $GITHUB_ENV
+          echo "GKE_CA_CERT=$(terraform output -raw cluster_outputs.gke_ca_certificate)" >> $GITHUB_ENV
 
       # Configure kubectl
       - name: Configure kubectl
@@ -239,29 +232,20 @@ jobs:
           kubectl config set-context gke --cluster=gke --user=sa --kubeconfig=infra/kubeconfig
           kubectl config use-context gke --kubeconfig=infra/kubeconfig
 
-      # Terraform Plan (Workloads)
-      - name: Terraform Plan (Workloads)
-        working-directory: infra/terraform
-        run: terraform plan -out=tfplan-workloads -var-file="terraform.tfvars"
-
-      # Terraform Apply (Workloads)
-      - name: Terraform Apply (Workloads)
-        working-directory: infra/terraform
-        run: terraform apply -auto-approve tfplan-workloads
-
-      # Update Frontend Deployment Image
-      - name: Update Frontend Deployment Image
+      # Deploy workloads via Helm with updated images
+      - name: Deploy Frontend via Helm
         run: |
-          kubectl set image deployment/frontend-deployment \
-            frontend=us-central1-docker.pkg.dev/cloud-cost-optimizer-488008/frontend-repo/frontend:${{ github.sha }}
-          kubectl rollout status deployment/frontend-deployment
+          helm upgrade --install frontend ./infra/helm/frontend \
+            --namespace default \
+            --set image.repository=us-central1-docker.pkg.dev/cloud-cost-optimizer-488008/frontend-repo/frontend \
+            --set image.tag=${{ github.sha }}
 
-      # Update Backend Deployment Image
-      - name: Update Backend Deployment Image
+      - name: Deploy Backend via Helm
         run: |
-          kubectl set image deployment/backend-deployment \
-            backend=us-central1-docker.pkg.dev/cloud-cost-optimizer-488008/backend-repo/backend:${{ github.sha }}
-          kubectl rollout status deployment/backend-deployment
+          helm upgrade --install backend ./infra/helm/backend \
+            --namespace default \
+            --set image.repository=us-central1-docker.pkg.dev/cloud-cost-optimizer-488008/backend-repo/backend \
+            --set image.tag=${{ github.sha }}
 
   smoke-test:
     runs-on: ubuntu-latest
@@ -275,56 +259,56 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      # Setup Terraform
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      # Setup gcloud CLI
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: cloud-cost-optimizer-488008
 
-      # Initialize Terraform
-      - name: Terraform Init
-        working-directory: infra/terraform
-        run: terraform init
-
-      # Run smoke test null resources only
-      - name: Terraform Apply Smoke Tests
-        working-directory: infra/terraform
-        run: terraform apply -auto-approve \
-          -target=null_resource.backend_smoke_test \
-          -target=null_resource.frontend_smoke_test
-
-      # Collect health status from outputs
-      - name: Collect Health Status
-        working-directory: infra/terraform
-        run: |
-          BACKEND_STATUS=$(terraform output -raw backend_health_status || echo "000")
-          FRONTEND_STATUS=$(terraform output -raw frontend_health_status || echo "000")
-
-          BACKEND_ICON="❌"; [ "$BACKEND_STATUS" = "200" ] && BACKEND_ICON="✅"
-          FRONTEND_ICON="❌"; [ "$FRONTEND_STATUS" = "200" ] && FRONTEND_ICON="✅"
-
-          echo "BACKEND_STATUS=$BACKEND_STATUS" >> $GITHUB_ENV
-          echo "FRONTEND_STATUS=$FRONTEND_STATUS" >> $GITHUB_ENV
-          echo "BACKEND_ICON=$BACKEND_ICON" >> $GITHUB_ENV
-          echo "FRONTEND_ICON=$FRONTEND_ICON" >> $GITHUB_ENV
-
-          [ "$BACKEND_STATUS" = "200" ] || exit 1
-          [ "$FRONTEND_STATUS" = "200" ] || exit 1
-
-      # Configure kubectl before pod/service summary
+      # Configure kubectl with cluster outputs
       - name: Configure kubectl
         run: |
           echo "$GKE_CA_CERT" > ca.crt
           kubectl config set-cluster gke \
-            --server=$GKE_ENDPOINT \
-            --certificate-authority=ca.crt
+            --server=https://$GKE_ENDPOINT \
+            --certificate-authority=ca.crt \
+            --kubeconfig=infra/kubeconfig
           kubectl config set-credentials sa \
-            --token=${{ secrets.GCP_SA_TOKEN }}
-          kubectl config set-context gke --cluster=gke --user=sa
-          kubectl config use-context gke
+            --token=${{ secrets.GCP_SA_TOKEN }} \
+            --kubeconfig=infra/kubeconfig
+          kubectl config set-context gke --cluster=gke --user=sa --kubeconfig=infra/kubeconfig
+          kubectl config use-context gke --kubeconfig=infra/kubeconfig
+
+      # Verify rollout status of deployments
+      - name: Verify Frontend Rollout
+        run: kubectl rollout status deployment/frontend-deployment --timeout=120s
+
+      - name: Verify Backend Rollout
+        run: kubectl rollout status deployment/backend-deployment --timeout=120s
+
+      # Get ingress IP
+      - name: Get Ingress IP
+        run: |
+          INGRESS_IP=$(kubectl get ingress frontend-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          echo "INGRESS_IP=$INGRESS_IP" >> $GITHUB_ENV
+
+      # Curl smoke tests
+      - name: Curl Frontend
+        run: |
+          FRONTEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$INGRESS_IP/)
+          echo "FRONTEND_STATUS=$FRONTEND_STATUS" >> $GITHUB_ENV
+          [ "$FRONTEND_STATUS" = "200" ] || exit 1
+
+      - name: Curl Backend Health
+        run: |
+          BACKEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$INGRESS_IP/api/health)
+          echo "BACKEND_STATUS=$BACKEND_STATUS" >> $GITHUB_ENV
+          [ "$BACKEND_STATUS" = "200" ] || exit 1
 
       # Pods & Services Summary
       - name: Pods & Services Summary
         run: |
-          PODS="$(kubectl get pods --no-headers | awk '{print $3}' | sort | uniq -c | sed 's/^ *//')"
+          PODS="$(kubectl get pods --no-headers)"
           SERVICES="$(kubectl get svc --no-headers)"
           INGRESS="$(kubectl get ingress --no-headers)"
           echo "PODS=$PODS" >> $GITHUB_ENV
@@ -342,8 +326,11 @@ jobs:
           DEPLOY_ICON="❌"; [ "$DEPLOY_STATUS" = "success" ] && DEPLOY_ICON="✅"
           SMOKE_ICON="❌"; [ "$SMOKE_STATUS" = "success" ] && SMOKE_ICON="✅"
 
+          FRONTEND_ICON="❌"; [ "$FRONTEND_STATUS" = "200" ] && FRONTEND_ICON="✅"
+          BACKEND_ICON="❌"; [ "$BACKEND_STATUS" = "200" ] && BACKEND_ICON="✅"
+
           jq -n \
-            --arg status "${{ job.status }}" \
+            --arg status "$SMOKE_STATUS" \
             --arg test "$TEST_STATUS" \
             --arg deploy "$DEPLOY_STATUS" \
             --arg smoke "$SMOKE_STATUS" \
@@ -360,7 +347,7 @@ jobs:
             --arg bicon "$BACKEND_ICON" \
             '{
               blocks: [
-                { type: "header", text: { type: "plain_text", text: "🚀 SaaS MVP Deployment Status" } },
+                { type: "header", text: { type: "plain_text", text: "🚀 SaaS MVP Smoke Test Results" } },
                 { type: "section", fields: [
                     { type: "mrkdwn", text: "*Pipeline:* Cloud Cost Optimizer" },
                     { type: "mrkdwn", text: "*Overall Status:* \($status)" }
@@ -374,7 +361,7 @@ jobs:
                 { type: "divider" },
                 { type: "section", text: { "type": "mrkdwn", "text": "*Frontend:* <http://\($ip)/|Open Frontend> \($ficon) (HTTP \($frontend))" } },
                 { type: "section", text: { "type": "mrkdwn", "text": "*Backend:* <http://\($ip)/api/health|Open Backend> \($bicon) (HTTP \($backend))" } },
-                { type: "section", text: { type: "mrkdwn", text: "*Pods Summary:* \n\($pods)" } },
+                { type: "section", text: { type: "mrkdwn", text: "*Pods:* \n\($pods)" } },
                 { type: "section", text: { type: "mrkdwn", text: "*Services:* \n\($services)" } },
                 { type: "section", text: { type: "mrkdwn", text: "*Ingress:* \n\($ingress)" } }
               ]

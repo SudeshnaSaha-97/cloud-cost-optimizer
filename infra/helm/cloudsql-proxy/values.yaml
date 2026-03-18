@@ -1,0 +1,16 @@
+replicaCount: 1
+
+image:
+  repository: gcr.io/cloudsql-docker/gce-proxy
+  tag: "1.33.3"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 5432
+
+nodePool: backend-pool   # optional, can be overridden
+
+cloudsql:
+  instance: ""   # injected by Terraform helm_release set
+  credentialsSecret: cloudsql-credentials

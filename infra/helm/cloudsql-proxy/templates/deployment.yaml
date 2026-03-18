@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudsql-proxy
+  namespace: default
+  labels:
+    app: cloudsql-proxy
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: cloudsql-proxy
+  template:
+    metadata:
+      labels:
+        app: cloudsql-proxy
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-nodepool: {{ .Values.nodePool }}
+      containers:
+        - name: cloudsql-proxy
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - "/cloud_sql_proxy"
+            - "-instances={{ .Values.cloudsql.instance }}=tcp:5432"
+          env:
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: "/secrets/cloudsql/credentials.json"
+          volumeMounts:
+            - name: cloudsql-credentials
+              mountPath: /secrets/cloudsql
+              readOnly: true
+      volumes:
+        - name: cloudsql-credentials
+          secret:
+            secretName: {{ .Values.cloudsql.credentialsSecret }}

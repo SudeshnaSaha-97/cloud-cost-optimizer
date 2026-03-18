@@ -1,55 +1,81 @@
 variable "project_id" {
-  description = "GCP project ID"
-  type        = string
+  type = string
+}
+
+variable "service_account" {
+  type = string
 }
 
 variable "region" {
-  description = "GCP region"
-  type        = string
-  default     = "us-central1"
+  type = string
+  default = "us-central1"
 }
 
 variable "zone" {
-  description = "GCP zone"
-  type        = string
-  default     = "us-central1-a"
+  type = string
+  default = "us-central1-a"
 }
 
 variable "cluster_name" {
-  description = "Name of the GKE cluster"
-  type        = string
-  default     = "cloud-cost-cluster"
+  type = string
+  default = "cloud-cost-cluster"
 }
 
-variable "frontend_repo" {
-  description = "Artifact Registry repo for frontend"
-  type        = string
-  default     = "frontend-repo"
+variable "frontend_pool_size" {
+  type = number
+  default = 2
 }
 
-variable "backend_repo" {
-  description = "Artifact Registry repo for backend"
-  type        = string
-  default     = "backend-repo"
+variable "backend_pool_size" {
+  type = number
+  default = 2
 }
 
-variable "enable_jenkins_vm" {
-  description = "Whether to provision Jenkins VM"
-  type        = bool
-  default     = false
-}
-
-variable "enable_cloudsql_postgres" {
-  description = "Whether to provision Cloud SQL Postgres"
-  type        = bool
-  default     = false
+variable "postgres_pool_size" {
+  type = number
+  default = 1
 }
 
 variable "enable_postgres_node" {
-  description = "Enable local Postgres deployment in cluster"
-  type        = bool
-  default     = false
+  type = bool
 }
 
+variable "enable_cloudsql_postgres" {
+  type = bool
+}
 
+variable "enable_jenkins_vm" {
+  type = bool
+}
 
+# Sensitive variables
+variable "cloudsql_db_user" {
+  type = string
+}
+
+variable "cloudsql_db_password" {
+  type = string
+  sensitive = true
+}
+
+variable "cloudsql_db_name" {
+  type = string
+}
+
+variable "gcp_service_account_json" {
+  type = string
+  sensitive = true
+}
+
+variable "postgres_user" {
+  type = string
+}
+
+variable "postgres_password" {
+  type = string
+  sensitive = true
+}
+
+variable "postgres_db" {
+  type = string
+}

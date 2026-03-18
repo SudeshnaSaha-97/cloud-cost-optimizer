@@ -1,0 +1,20 @@
+replicaCount: 2
+
+image:
+  repository: us-central1-docker.pkg.dev/cloud-cost-optimizer-488008/backend-repo/backend
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8000
+
+nodePool: backend-pool
+
+db:
+  host: "postgres"   # default to postgres service name
+  port: "5432"
+  secretName: cloudsql-db-credentials
+  userKey: username
+  passwordKey: password
+  databaseKey: database
