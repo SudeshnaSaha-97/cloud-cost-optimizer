@@ -28,14 +28,6 @@ provider "google" {
 
 data "google_client_config" "default" {}
 
-data "terraform_remote_state" "cluster" {
-  backend = "gcs"
-  config = {
-    bucket = "cloud-cost-optimizer-tfstate"
-    prefix = "terraform/state/cluster"
-  }
-}
-
 provider "kubernetes" {
   host                   = "https://${var.gke_endpoint}"
   cluster_ca_certificate = base64decode(var.gke_ca_certificate)

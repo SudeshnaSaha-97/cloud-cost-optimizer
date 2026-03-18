@@ -24,7 +24,7 @@ resource "helm_release" "cloudsql_proxy" {
   namespace = "default"
   set {
     name  = "cloudsql.instance"
-    value = data.terraform_remote_state.cluster.outputs.cloudsql_connection_name
+    value = var.cloudsql_connection_name
   }
 }
 
