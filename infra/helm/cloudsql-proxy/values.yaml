@@ -12,5 +12,5 @@ service:
 nodePool: backend-pool   # optional, can be overridden
 
 cloudsql:
-  instance: ""   # injected by Terraform helm_release set
-  credentialsSecret: cloudsql-credentials
+  instance: ""   # injected via Helm --set cloudsql.instance
+  credentialsSecret: cloudsql-db-credentials

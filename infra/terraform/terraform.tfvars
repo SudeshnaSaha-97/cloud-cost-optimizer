@@ -4,5 +4,5 @@ service_account = "cloud-cost-optimizer@cloud-cost-optimizer-488008.iam.gservice
 
 # Toggles
 enable_jenkins_vm        = false
-enable_cloudsql_postgres = true
+enable_cloudsql_proxy    = true
 enable_postgres_node     = false

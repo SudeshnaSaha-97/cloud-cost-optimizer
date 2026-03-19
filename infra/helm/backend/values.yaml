@@ -12,9 +12,17 @@ service:
 nodePool: backend-pool
 
 db:
-  host: "postgres"   # default to postgres service name
+  host: "cloudsql-proxy"   # default to Cloud SQL proxy service name
   port: "5432"
   secretName: cloudsql-db-credentials
   userKey: username
   passwordKey: password
   databaseKey: database
+
+
+#db:
+#  host: "postgres"   # service name of Postgres deployment
+#  secretName: postgres-db-credentials
+#  userKey: username
+#  passwordKey: password
+#  databaseKey: database

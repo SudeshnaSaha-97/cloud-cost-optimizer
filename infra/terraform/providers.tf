@@ -2,16 +2,8 @@ terraform {
   required_version = ">= 1.5.0"
   required_providers {
     google = {
-      source = "hashicorp/google"
+      source  = "hashicorp/google"
       version = "~> 5.45"
-    }
-    kubernetes = {
-      source = "hashicorp/kubernetes"
-      version = "~> 2.20"
-    }
-    helm = {
-      source = "hashicorp/helm"
-      version = "~> 2.11"
     }
   }
   backend "gcs" {
@@ -24,22 +16,4 @@ provider "google" {
   project = var.project_id
   region  = var.region
   zone    = var.zone
-}
-
-data "google_client_config" "default" {}
-
-provider "kubernetes" {
-  alias                  = "gke"
-  host                   = "https://${module.cluster.gke_endpoint}"
-  cluster_ca_certificate = base64decode(module.cluster.gke_ca_certificate)
-  token                  = data.google_client_config.default.access_token
-}
-
-provider "helm" {
-  alias                    = "gke"
-  kubernetes {
-    host                   = "https://${module.cluster.gke_endpoint}"
-    cluster_ca_certificate = base64decode(module.cluster.gke_ca_certificate)
-    token                  = data.google_client_config.default.access_token
-  }
 }

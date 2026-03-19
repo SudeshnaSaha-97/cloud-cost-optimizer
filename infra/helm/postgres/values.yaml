@@ -12,7 +12,7 @@ service:
 nodePool: postgres-pool
 
 db:
-  secretName: postgres-secret
+  secretName: postgres-db-credentials
   userKey: username
   passwordKey: password
-  database: cloudcost
+  databaseKey: database

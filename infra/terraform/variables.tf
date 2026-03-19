@@ -1,81 +1,57 @@
 variable "project_id" {
-  type = string
-}
-
-variable "service_account" {
-  type = string
+  description = "GCP project ID"
+  type        = string
 }
 
 variable "region" {
-  type = string
-  default = "us-central1"
+  description = "GCP region"
+  type        = string
+  default     = "us-central1"
 }
 
 variable "zone" {
-  type = string
-  default = "us-central1-a"
+  description = "GCP zone"
+  type        = string
+  default     = "us-central1-a"
 }
 
 variable "cluster_name" {
-  type = string
-  default = "cloud-cost-cluster"
+  description = "Name of the GKE cluster"
+  type        = string
 }
 
 variable "frontend_pool_size" {
-  type = number
-  default = 2
+  description = "Number of nodes in frontend pool"
+  type        = number
+  default     = 2
 }
 
 variable "backend_pool_size" {
-  type = number
-  default = 2
+  description = "Number of nodes in backend pool"
+  type        = number
+  default     = 2
 }
 
 variable "postgres_pool_size" {
-  type = number
-  default = 1
-}
-
-variable "enable_postgres_node" {
-  type = bool
-}
-
-variable "enable_cloudsql_postgres" {
-  type = bool
+  description = "Number of nodes in postgres pool"
+  type        = number
+  default     = 2
 }
 
 variable "enable_jenkins_vm" {
-  type = bool
+  description = "Enable Jenkins VM for CI/CD"
+  type        = bool
+  default     = false
 }
 
-# Sensitive variables
-variable "cloudsql_db_user" {
-  type = string
+variable "enable_cloudsql_proxy" {
+  description = "Enable Cloud SQL proxy sidecar"
+  type        = bool
+  default     = false
 }
 
-variable "cloudsql_db_password" {
-  type = string
-  sensitive = true
-}
-
-variable "cloudsql_db_name" {
-  type = string
-}
-
-variable "gcp_service_account_json" {
-  type = string
-  sensitive = true
-}
-
-variable "postgres_user" {
-  type = string
-}
-
-variable "postgres_password" {
-  type = string
-  sensitive = true
-}
-
-variable "postgres_db" {
-  type = string
+variable "enable_postgres_node" {
+  description = "Enable dedicated Postgres node pool"
+  type        = bool
+  default     = false
 }
