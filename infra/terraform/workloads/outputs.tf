@@ -1,10 +1,10 @@
 output "frontend_status" {
-  value = helm_release.frontend.status
+  value = helm_release.frontend[0].status
   description = "Status of Frontend"
 }
 
 output "backend_status" {
-  value = helm_release.backend.status
+  value = helm_release.backend[0].status
   description = "Status of Backend"
 }
 
