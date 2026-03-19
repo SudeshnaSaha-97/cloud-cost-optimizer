@@ -1,9 +1,3 @@
-provider "google" {
-  project = var.project_id
-  region  = var.region
-  zone    = var.zone
-}
-
 # Cluster module
 module "cluster" {
   source = "./cluster"
@@ -24,6 +18,11 @@ module "cluster" {
 # Workloads module
 module "workloads" {
   source = "./workloads"
+  providers = {
+    google     = google
+    kubernetes = kubernetes
+    helm       = helm
+  }
   depends_on = [module.cluster]
 
   project_id             = var.project_id

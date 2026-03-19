@@ -19,3 +19,25 @@ terraform {
     prefix = "terraform/state/root"
   }
 }
+
+provider "google" {
+  project = var.project_id
+  region  = var.region
+  zone    = var.zone
+}
+
+data "google_client_config" "default" {}
+
+provider "kubernetes" {
+  host                   = "https://${module.cluster.gke_endpoint}"
+  cluster_ca_certificate = base64decode(module.cluster.gke_ca_certificate)
+  token                  = data.google_client_config.default.access_token
+}
+
+provider "helm" {
+  kubernetes {
+    host                   = "https://${module.cluster.gke_endpoint}"
+    cluster_ca_certificate = base64decode(module.cluster.gke_ca_certificate)
+    token                  = data.google_client_config.default.access_token
+  }
+}
