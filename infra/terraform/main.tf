@@ -18,12 +18,13 @@ module "cluster" {
 # Workloads module
 module "workloads" {
   source = "./workloads"
+  depends_on = [module.cluster]
+
   providers = {
     google     = google
     kubernetes = kubernetes
     helm       = helm
   }
-  depends_on = [module.cluster]
 
   project_id             = var.project_id
   enable_postgres_node   = var.enable_postgres_node
