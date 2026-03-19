@@ -1,10 +1,12 @@
 resource "helm_release" "frontend" {
+  count     = var.gke_endpoint != "" ? 1 : 0
   name      = "frontend"
   chart     = "${path.module}/../../helm/frontend"
   namespace = "default"
 }
 
 resource "helm_release" "backend" {
+  count     = var.gke_endpoint != "" ? 1 : 0
   name      = "backend"
   chart     = "${path.module}/../../helm/backend"
   namespace = "default"

@@ -44,11 +44,6 @@ jobs:
           cd infra/terraform
           terraform validate
 
-      - name: Terraform Plan
-        run: |
-          cd infra/terraform
-          terraform plan -out=tfplan
-
       - name: Terraform Apply
         run: |
           cd infra/terraform
