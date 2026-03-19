@@ -22,8 +22,8 @@ module "workloads" {
 
   providers = {
     google     = google
-    kubernetes = kubernetes
-    helm       = helm
+    kubernetes = kubernetes.gke
+    helm       = helm.gke
   }
 
   project_id             = var.project_id
