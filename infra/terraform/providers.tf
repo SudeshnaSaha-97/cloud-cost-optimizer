@@ -9,6 +9,7 @@ terraform {
   backend "gcs" {
     bucket = "cloud-cost-optimizer-tfstate"
     prefix = "terraform/state/root"
+    credentials = "path/to/service-account.json"
   }
 }
 
